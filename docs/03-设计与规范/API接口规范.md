@@ -1,6 +1,6 @@
-# API 接口规范（V2）
+# API 接口规范（V3）
 
-> 状态：**生效（V2 已实现）**  
+> 状态：**生效（V3 已实现）**  
 > 基础地址（本机）：`http://127.0.0.1:8000`  
 > 基础地址（局域网）：`http://<Mac局域网IP>:8000`
 
@@ -113,6 +113,7 @@ Authorization: Bearer <token>
 | `history` | array | 否 | 历史消息；最多 `MAX_HISTORY_MESSAGES`（默认 20）条，总字符数 ≤ `MAX_HISTORY_CHARS`（默认 12000） |
 | `history[].role` | string | 是 | 只能是 `user` 或 `assistant` |
 | `history[].content` | string | 是 | 去除首尾空白后非空 |
+| `use_memory` | bool | 否 | 默认 `false`；为 `true` 时检索并注入相关长期记忆 |
 
 约束：
 
@@ -305,7 +306,96 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 - 不返回数据库路径、文档正文或绝对路径。
 
-## 10. 调用示例
+## 10. 记忆 API
+
+长期记忆为全家共享；聊天默认不使用，需显式 `use_memory: true`。所有记忆数据接口需要 Token。
+
+### 10.1 `POST /api/v1/memory`
+
+```json
+{
+  "content": "周末家庭活动优先安排户外。",
+  "tags": ["家庭", "周末"]
+}
+```
+
+响应 `201`：
+
+```json
+{
+  "id": 1,
+  "content": "周末家庭活动优先安排户外。",
+  "tags": ["家庭", "周末"],
+  "source": "explicit",
+  "created_at": "2026-10-18T15:07:43+00:00",
+  "updated_at": "2026-10-18T15:07:43+00:00",
+  "score": null
+}
+```
+
+- `content` 去除首尾空白后非空，长度 ≤ `MEMORY_MAX_CHARS`（默认 500）。
+- 标签最多 5 个，每个最多 20 字符。
+- 相同内容返回 `409 memory already exists`。
+- 未配置 Embedding 服务时返回 `503`。
+
+### 10.2 `GET /api/v1/memory`
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `query` | string | 否 | 提供时按向量相似度搜索 |
+| `limit` | int | 否 | 1～100，默认 50 |
+
+响应：
+
+```json
+{
+  "entries": [
+    {
+      "id": 1,
+      "content": "周末家庭活动优先安排户外。",
+      "tags": ["家庭", "周末"],
+      "source": "explicit",
+      "created_at": "...",
+      "updated_at": "...",
+      "score": 0.82
+    }
+  ]
+}
+```
+
+- 不提供 `query` 时按更新时间倒序返回。
+- `score` 仅搜索时出现，其他情况为 `null`。
+
+### 10.3 `PATCH /api/v1/memory/{id}`
+
+```json
+{
+  "content": "周末家庭活动优先安排户外或亲子活动。",
+  "tags": ["家庭"]
+}
+```
+
+- 至少提供一个字段。
+- 修改内容时重新生成向量；与已有记忆重复返回 `409`。
+- 不存在返回 `404`。
+
+### 10.4 `DELETE /api/v1/memory/{id}`
+
+成功返回 `{"deleted": true}`；不存在返回 `404`。删除为永久操作。
+
+### 10.5 `GET /api/v1/memory/view`
+
+记忆管理页面，无需认证；页面不嵌入任何记忆数据，输入 Token 后由浏览器调用上述接口。Token 只保存在页面内存中。
+
+### 10.6 自动提取
+
+- 由聊天请求触发，后台执行，不阻塞回答。
+- 只读取本轮用户消息；严格限制为长期稳定的个人事实/偏好/约定。
+- 最多 3 条，每条最多 200 字；来源标记为 `auto`。
+- 可通过 `AUTO_MEMORY_ENABLED=false` 关闭。
+- 自动提取不会把消息内容写入日志。
+
+## 11. 调用示例
 
 健康检查：
 
@@ -363,12 +453,40 @@ curl http://127.0.0.1:8000/api/v1/kb/stats \
   -H 'Authorization: Bearer YOUR_REAL_TOKEN'
 ```
 
+新增记忆：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/memory \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN' \
+  -d '{"content":"周末家庭活动优先安排户外。","tags":["家庭","周末"]}'
+```
+
+记忆列表：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/memory?limit=20" \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN'
+```
+
+聊天时使用记忆：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN' \
+  -d '{"message":"周末做什么？","use_memory":true}'
+```
+
+记忆管理页面：<http://127.0.0.1:8000/api/v1/memory/view>
+
 > 示例中的 Token 必须替换为本地 `.env` 的真实值；不要把带真实 Token 的命令提交、截图或分享。
 
-## 11. 版本与兼容
+## 12. 版本与兼容
 
 - V1 路径固定为 `/api/v1`。
 - 新增可选字段不视为破坏性变更；删除字段、改变字段含义或改变认证方式需要新版本路径。
 - V1.1 新增可选 `history`、`/chat/stream`、`/logs` 与 `/logs/view`。
 - V2 新增 `/rag/query` 与 `/kb/stats`，不改变已有接口契约。
+- V3 新增 `/memory` CRUD、`/memory/view` 与聊天可选 `use_memory`；默认不注入记忆。
 - `/chat` 保持非流式；需要逐字输出时使用 `/chat/stream`。

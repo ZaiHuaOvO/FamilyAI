@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V2 已完成（`v2.0.0`）**——本地模型、流式聊天、对话历史、请求日志与本地知识库/RAG 均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V3 已完成（`v3.0.0`）**——本地模型、流式聊天、对话历史、请求日志、本地知识库/RAG 与长期记忆均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -12,6 +12,7 @@
 - 客户端携带多轮对话历史（服务端不持久化）。
 - 请求日志查询接口与查看页面（只记录元数据）。
 - 本地 Markdown/TXT 知识库问答（返回来源）。
+- 长期记忆：显式新增/编辑/删除 + 自动提取；聊天默认不使用，需 `use_memory: true`。
 - 家庭 Wi-Fi 内设备可访问 FastAPI，Ollama 端口只监听本机。
 
 不包含：客户端 App、RAG/向量库、长期记忆、主动提醒、公网访问。
@@ -48,6 +49,7 @@ uv run uvicorn family_ai_api.main:app --host 0.0.0.0 --port 8000
 - 健康检查：<http://127.0.0.1:8000/api/v1/health>
 - 接口文档：<http://127.0.0.1:8000/docs>
 - 请求日志页面：<http://127.0.0.1:8000/api/v1/logs/view>
+- 记忆管理页面：<http://127.0.0.1:8000/api/v1/memory/view>
 
 ## API 概览
 
@@ -61,6 +63,11 @@ uv run uvicorn family_ai_api.main:app --host 0.0.0.0 --port 8000
 | GET | `/api/v1/logs/view` | 日志查看页面 | 页面可访问，数据需 Token |
 | POST | `/api/v1/rag/query` | 知识库问答，返回来源 | 是 |
 | GET | `/api/v1/kb/stats` | 知识库文档/片段统计 | 是 |
+| POST | `/api/v1/memory` | 新增记忆 | 是 |
+| GET | `/api/v1/memory` | 记忆列表/搜索 | 是 |
+| PATCH | `/api/v1/memory/{id}` | 修改记忆 | 是 |
+| DELETE | `/api/v1/memory/{id}` | 删除记忆 | 是 |
+| GET | `/api/v1/memory/view` | 记忆管理页面 | 页面可访问，数据需 Token |
 
 流式调用示例：
 
@@ -92,6 +99,7 @@ uv run ruff check .
 - [进度追踪](docs/进度追踪.md)
 - [V1.1 调用体验](docs/02-实施阶段/V1.1-调用体验.md)
 - [V2 知识库/RAG](docs/02-实施阶段/V2-知识库RAG.md)
+- [V3 长期记忆](docs/02-实施阶段/V3-长期记忆.md)
 - [API 接口规范](docs/03-设计与规范/API接口规范.md)
 - [原始开发指南（归档）](docs/00-归档/原始开发文档-V1.1.md)
 
