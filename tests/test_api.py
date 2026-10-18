@@ -14,13 +14,15 @@ AUTH = {"Authorization": "Bearer test-token"}
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(tmp_path) -> TestClient:
     settings = Settings(
         api_access_token="test-token",
         ai_model="test-model",
         max_message_chars=20,
         max_history_messages=3,
         max_history_chars=50,
+        auto_memory_enabled=False,
+        memory_db_path=str(tmp_path / "memory.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as test_client:
@@ -346,11 +348,17 @@ def test_logs_page_is_public_html(client: TestClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = Settings(api_access_token="test-token", ai_model="test-model")
+async def test_concurrency_limit(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        api_access_token="test-token",
+        ai_model="test-model",
+        auto_memory_enabled=False,
+        memory_db_path=str(tmp_path / "memory.db"),
+    )
     app.dependency_overrides[get_settings] = lambda: settings
     app.state.chat_semaphore = asyncio.Semaphore(1)
     app.state.rate_limiter = SlidingWindowRateLimiter(100)
+    app.state.memory_extraction_semaphore = asyncio.Semaphore(1)
 
     started = asyncio.Event()
     release = asyncio.Event()

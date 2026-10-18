@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     kb_max_context_chars: int = 6000
     kb_chunk_chars: int = 500
     kb_chunk_overlap: int = 80
+    memory_db_path: str = "data/memory.db"
+    memory_top_k: int = 5
+    memory_min_score: float = 0.3
+    memory_max_context_chars: int = 2000
+    memory_max_chars: int = 500
+    auto_memory_enabled: bool = True
+    auto_memory_min_chars: int = 4
+    auto_memory_max_items: int = 3
 
 
 @lru_cache

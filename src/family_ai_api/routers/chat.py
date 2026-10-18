@@ -4,11 +4,14 @@ import logging
 import time
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from family_ai_api.config import Settings, get_settings
+from family_ai_api.knowledge.embeddings import EmbeddingError
+from family_ai_api.memory import service as memory_service
+from family_ai_api.memory.extractor import run_auto_extraction
 from family_ai_api.security import require_token
 from family_ai_api.services import ollama_client
 from family_ai_api.services.chat_guard import acquire_slot, enforce_rate_limit
@@ -26,6 +29,7 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[HistoryMessage] = Field(default_factory=list)
+    use_memory: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -74,16 +78,42 @@ def build_messages(payload: ChatRequest, settings: Settings) -> list[dict[str, s
     return messages
 
 
+async def prepare_messages(
+    payload: ChatRequest,
+    settings: Settings,
+) -> list[dict[str, str]]:
+    messages = build_messages(payload, settings)
+    if not payload.use_memory:
+        return messages
+
+    try:
+        context = await memory_service.build_context(payload.message.strip(), settings)
+    except (EmbeddingError, ValueError):
+        logger.warning("memory retrieval skipped")
+        return messages
+
+    if context:
+        messages.insert(0, {"role": "system", "content": context})
+    return messages
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     payload: ChatRequest,
     request: Request,
+    background: BackgroundTasks,
     token_key: Annotated[str, Depends(require_token)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ChatResponse:
-    messages = build_messages(payload, settings)
+    messages = await prepare_messages(payload, settings)
     enforce_rate_limit(request, token_key)
     semaphore = await acquire_slot(request)
+    background.add_task(
+        run_auto_extraction,
+        payload.message.strip(),
+        settings,
+        getattr(request.app.state, "memory_extraction_semaphore", None),
+    )
 
     try:
         started = time.perf_counter()
@@ -105,11 +135,18 @@ def sse_event(event: str, data: dict) -> str:
 async def chat_stream(
     payload: ChatRequest,
     request: Request,
+    background: BackgroundTasks,
     token_key: Annotated[str, Depends(require_token)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> StreamingResponse:
-    messages = build_messages(payload, settings)
+    messages = await prepare_messages(payload, settings)
     enforce_rate_limit(request, token_key)
+    background.add_task(
+        run_auto_extraction,
+        payload.message.strip(),
+        settings,
+        getattr(request.app.state, "memory_extraction_semaphore", None),
+    )
     semaphore: asyncio.Semaphore = request.app.state.chat_semaphore
 
     async def event_generator():
@@ -140,4 +177,5 @@ async def chat_stream(
         event_generator(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        background=background,
     )

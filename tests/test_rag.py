@@ -20,6 +20,8 @@ def rag_client(tmp_path):
         kb_db_path=str(tmp_path / "kb.db"),
         kb_top_k=1,
         kb_max_context_chars=1000,
+        auto_memory_enabled=False,
+        memory_db_path=str(tmp_path / "memory.db"),
     )
     store = KnowledgeStore(settings.kb_db_path)
     store.upsert_document(
