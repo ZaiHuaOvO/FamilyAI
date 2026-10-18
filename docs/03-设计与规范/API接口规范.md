@@ -1,6 +1,6 @@
-# API 接口规范（V4）
+# API 接口规范（V5）
 
-> 状态：**生效（V4 已实现）**  
+> 状态：**生效（V5 已实现）**  
 > 基础地址（本机）：`http://127.0.0.1:8000`  
 > 基础地址（局域网）：`http://<Mac局域网IP>:8000`
 
@@ -487,7 +487,113 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - 天气请求失败时 `weather=null`，任务简报仍正常返回。
 - 不主动推送；用户主动调用或打开页面查看。
 
-## 13. 调用示例
+## 13. Agent 工具调用
+
+Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具只生成 `pending_action`，确认后才执行。
+
+| 方法 | 路径 | 说明 | 认证 |
+|---|---|---|---|
+| `POST` | `/api/v1/agent/chat` | 规划并回答问题 | 是 |
+| `GET` | `/api/v1/agent/tools` | 列出白名单工具 | 是 |
+| `GET` | `/api/v1/agent/audit` | 最近工具审计 | 是 |
+| `POST` | `/api/v1/agent/actions/{id}/confirm` | 确认并执行写操作 | 是 |
+| `POST` | `/api/v1/agent/actions/{id}/cancel` | 取消待执行动作 | 是 |
+
+### 13.1 `POST /api/v1/agent/chat`
+
+请求：
+
+```json
+{ "message": "今天有什么任务？" }
+```
+
+直接回答（无工具）：
+
+```json
+{
+  "answer": "今天没有待处理的任务。",
+  "tool": null,
+  "pending_action": null
+}
+```
+
+只读工具执行后：
+
+```json
+{
+  "answer": "默认聊天模型是 qwen3.5:4b。",
+  "tool": { "name": "search_knowledge", "status": "ok" },
+  "pending_action": null
+}
+```
+
+写工具待确认：
+
+```json
+{
+  "answer": "已准备执行工具 create_task。确认后才会执行。",
+  "tool": null,
+  "pending_action": {
+    "id": "bLQ5rZ0OoCnd3sRxTWkmFnfN",
+    "tool": "create_task",
+    "arguments": { "title": "明天买菜", "notes": "", "due_at": "2026-10-19" },
+    "expires_at": "2026-10-18T15:24:54+00:00"
+  }
+}
+```
+
+- 只读工具：`get_briefing`、`list_tasks`、`search_knowledge`、`list_memories`。
+- 写工具：`create_task`、`complete_task`、`add_memory`。
+- 写工具的动作默认 5 分钟过期、单次有效，并与创建它的 Token 绑定。
+- 服务端会对 `create_task` 的日期做防幻觉处理：只有用户明确给出日期或“今天/明天/后天”时才设置 `due_at`。
+
+### 13.2 `GET /api/v1/agent/tools`
+
+返回工具名、说明、参数 JSON Schema 与是否为写工具。
+
+### 13.3 `GET /api/v1/agent/audit?limit=50`
+
+返回最近工具调用审计：
+
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2026-10-18T15:24:00+00:00",
+      "tool": "create_task",
+      "write": true,
+      "status": "ok",
+      "duration_ms": 0.9,
+      "action_id": "bLQ5rZ0OoCnd3sRxTWkmFnfN"
+    }
+  ]
+}
+```
+
+- 只包含元数据，不包含参数或结果正文。
+- 保存在内存中，重启后清空。
+
+### 13.4 `POST /api/v1/agent/actions/{id}/confirm`
+
+成功：
+
+```json
+{
+  "executed": true,
+  "tool": "create_task",
+  "result": { "id": 4, "title": "明天买菜", "due_at": "2026-10-19", "done": false }
+}
+```
+
+- 动作不存在、已使用或过期：`404`。
+- 写工具被禁用：`403`。
+- 执行失败：`409`（如任务不存在、记忆已存在）。
+
+### 13.5 `POST /api/v1/agent/actions/{id}/cancel`
+
+成功返回 `{"cancelled": true}`；不存在或过期返回 `404`。
+
+## 14. 调用示例
 
 健康检查：
 
@@ -590,9 +696,32 @@ curl http://127.0.0.1:8000/api/v1/briefing \
 
 任务管理页面：<http://127.0.0.1:8000/api/v1/tasks/view>
 
+Agent 问答：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/agent/chat \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN' \
+  -d '{"message":"今天有什么任务？"}'
+```
+
+确认 Agent 写操作：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/agent/actions/PENDING_ACTION_ID/confirm \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN'
+```
+
+工具审计：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/agent/audit?limit=20" \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN'
+```
+
 > 示例中的 Token 必须替换为本地 `.env` 的真实值；不要把带真实 Token 的命令提交、截图或分享。
 
-## 14. 版本与兼容
+## 15. 版本与兼容
 
 - V1 路径固定为 `/api/v1`。
 - 新增可选字段不视为破坏性变更；删除字段、改变字段含义或改变认证方式需要新版本路径。
@@ -600,4 +729,5 @@ curl http://127.0.0.1:8000/api/v1/briefing \
 - V2 新增 `/rag/query` 与 `/kb/stats`，不改变已有接口契约。
 - V3 新增 `/memory` CRUD、`/memory/view` 与聊天可选 `use_memory`；默认不注入记忆。
 - V4 新增 `/tasks` CRUD、`/tasks/view` 与 `/briefing`；天气为可选配置，不做主动通知。
+- V5 新增 `/agent` 工具调用：只读工具自动执行，写工具需要二次确认；不接外部服务。
 - `/chat` 保持非流式；需要逐字输出时使用 `/chat/stream`。

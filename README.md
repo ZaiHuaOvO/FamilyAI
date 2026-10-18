@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V4 已完成（`v4.0.0`）**——本地模型、流式聊天、对话历史、请求日志、知识库/RAG、长期记忆与家庭任务/简报均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V5 已完成（`v5.0.0`）**——本地模型、流式聊天、请求日志、知识库/RAG、长期记忆、家庭任务/简报与受控工具调用均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -14,6 +14,7 @@
 - 本地 Markdown/TXT 知识库问答（返回来源）。
 - 长期记忆：显式新增/编辑/删除 + 自动提取；聊天默认不使用，需 `use_memory: true`。
 - 家庭任务：CRUD、今日/逾期筛选、手动简报、可选天气、管理页面。
+- 工具调用：任务/知识库/记忆的只读工具自动执行；写工具需要 API 二次确认。
 - 家庭 Wi-Fi 内设备可访问 FastAPI，Ollama 端口只监听本机。
 
 不包含：客户端 App、RAG/向量库、长期记忆、主动提醒、公网访问。
@@ -76,6 +77,11 @@ uv run uvicorn family_ai_api.main:app --host 0.0.0.0 --port 8000
 | DELETE | `/api/v1/tasks/{id}` | 删除任务 | 是 |
 | GET | `/api/v1/tasks/view` | 任务管理页面 | 页面可访问，数据需 Token |
 | GET | `/api/v1/briefing` | 今日/逾期简报 + 可选天气 | 是 |
+| POST | `/api/v1/agent/chat` | 工具规划与回答 | 是 |
+| GET | `/api/v1/agent/tools` | 白名单工具 | 是 |
+| GET | `/api/v1/agent/audit` | 工具调用审计 | 是 |
+| POST | `/api/v1/agent/actions/{id}/confirm` | 确认写操作 | 是 |
+| POST | `/api/v1/agent/actions/{id}/cancel` | 取消写操作 | 是 |
 
 流式调用示例：
 
@@ -96,6 +102,8 @@ uv run python -m family_ai_api.knowledge.ingest knowledge.example
 
 可选天气：在 `.env` 中设置 `WEATHER_LATITUDE`、`WEATHER_LONGITUDE` 与 `WEATHER_LOCATION_NAME`，简报会使用 Open-Meteo 获取天气；不设置则只返回任务。
 
+工具调用：只读工具自动执行；`create_task`、`complete_task`、`add_memory` 会先返回 `pending_action`，需调用 `/api/v1/agent/actions/{id}/confirm` 才会执行。写工具可用 `AGENT_WRITE_TOOLS_ENABLED=false` 关闭。
+
 ## 测试与检查
 
 ```bash
@@ -111,6 +119,7 @@ uv run ruff check .
 - [V2 知识库/RAG](docs/02-实施阶段/V2-知识库RAG.md)
 - [V3 长期记忆](docs/02-实施阶段/V3-长期记忆.md)
 - [V4 家庭任务与提醒](docs/02-实施阶段/V4-家庭任务与提醒.md)
+- [V5 工具调用](docs/02-实施阶段/V5-工具调用.md)
 - [API 接口规范](docs/03-设计与规范/API接口规范.md)
 - [原始开发指南（归档）](docs/00-归档/原始开发文档-V1.1.md)
 
