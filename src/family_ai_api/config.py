@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     max_concurrent_requests: int = 2
     rate_limit_per_minute: int = 30
     max_request_bytes: int = 16384
+    max_history_messages: int = 20
+    max_history_chars: int = 12000
+    request_log_size: int = 200
 
 
 @lru_cache

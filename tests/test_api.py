@@ -19,6 +19,8 @@ def client() -> TestClient:
         api_access_token="test-token",
         ai_model="test-model",
         max_message_chars=20,
+        max_history_messages=3,
+        max_history_chars=50,
     )
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as test_client:
@@ -50,7 +52,9 @@ def test_chat_requires_token_and_does_not_call_model(
 ) -> None:
     called = False
 
-    async def fake_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
         nonlocal called
         called = True
         return ollama_client.ChatResult("x", settings.ai_model)
@@ -76,11 +80,87 @@ def test_chat_rejects_long_message(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_chat_includes_history(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
+        captured["messages"] = messages
+        return ollama_client.ChatResult("ok", settings.ai_model)
+
+    monkeypatch.setattr(ollama_client, "chat", fake_chat)
+
+    response = client.post(
+        "/api/v1/chat",
+        headers=AUTH,
+        json={
+            "message": "第二轮",
+            "history": [
+                {"role": "user", "content": "第一轮"},
+                {"role": "assistant", "content": "第一轮回答"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["messages"] == [
+        {"role": "user", "content": "第一轮"},
+        {"role": "assistant", "content": "第一轮回答"},
+        {"role": "user", "content": "第二轮"},
+    ]
+
+
+def test_chat_rejects_too_much_history(client: TestClient) -> None:
+    history = [{"role": "user", "content": "x"} for _ in range(4)]
+
+    response = client.post(
+        "/api/v1/chat", headers=AUTH, json={"message": "hi", "history": history}
+    )
+
+    assert response.status_code == 422
+
+
+def test_chat_rejects_too_large_history(client: TestClient) -> None:
+    history = [
+        {"role": "user", "content": "a" * 30},
+        {"role": "assistant", "content": "b" * 30},
+    ]
+
+    response = client.post(
+        "/api/v1/chat", headers=AUTH, json={"message": "hi", "history": history}
+    )
+
+    assert response.status_code == 422
+
+
+def test_chat_rejects_empty_history_content(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/chat",
+        headers=AUTH,
+        json={"message": "hi", "history": [{"role": "user", "content": "   "}]},
+    )
+
+    assert response.status_code == 422
+
+
+def test_chat_rejects_invalid_history_role(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/chat",
+        headers=AUTH,
+        json={"message": "hi", "history": [{"role": "system", "content": "x"}]},
+    )
+
+    assert response.status_code == 422
+
+
 def test_chat_returns_model_response(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
-        assert message == "你好"
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
+        assert messages == [{"role": "user", "content": "你好"}]
         return ollama_client.ChatResult("你好呀", settings.ai_model)
 
     monkeypatch.setattr(ollama_client, "chat", fake_chat)
@@ -110,7 +190,9 @@ def test_chat_maps_upstream_errors(
     error: ollama_client.OllamaError,
     expected_status: int,
 ) -> None:
-    async def fake_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
         raise error
 
     monkeypatch.setattr(ollama_client, "chat", fake_chat)
@@ -135,7 +217,9 @@ def test_chat_rejects_oversized_body(client: TestClient) -> None:
 def test_rate_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     app.state.rate_limiter = SlidingWindowRateLimiter(1)
 
-    async def fake_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
         return ollama_client.ChatResult("ok", settings.ai_model)
 
     monkeypatch.setattr(ollama_client, "chat", fake_chat)
@@ -150,7 +234,9 @@ def test_rate_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None
 def test_access_log_does_not_contain_token_or_message(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    async def fake_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
         return ollama_client.ChatResult("secret-answer", settings.ai_model)
 
     monkeypatch.setattr(ollama_client, "chat", fake_chat)
@@ -166,6 +252,99 @@ def test_access_log_does_not_contain_token_or_message(
     assert "secret-answer" not in caplog.text
 
 
+def test_chat_stream_requires_token(client: TestClient) -> None:
+    response = client.post("/api/v1/chat/stream", json={"message": "你好"})
+
+    assert response.status_code == 401
+
+
+def test_chat_stream_returns_sse(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_stream(messages: list[dict[str, str]], settings: Settings):
+        yield "你"
+        yield "好"
+
+    monkeypatch.setattr(ollama_client, "chat_stream", fake_stream)
+
+    response = client.post(
+        "/api/v1/chat/stream", headers=AUTH, json={"message": "你好"}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    text = response.text
+    assert "event: delta" in text
+    assert '"delta": "你"' in text
+    assert '"delta": "好"' in text
+    assert "event: done" in text
+    assert '"model": "test-model"' in text
+
+
+def test_chat_stream_emits_error_event(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_stream(messages: list[dict[str, str]], settings: Settings):
+        if False:
+            yield ""
+        raise ollama_client.ModelServiceUnavailableError
+
+    monkeypatch.setattr(ollama_client, "chat_stream", fake_stream)
+
+    response = client.post(
+        "/api/v1/chat/stream", headers=AUTH, json={"message": "你好"}
+    )
+
+    assert response.status_code == 200
+    assert "event: error" in response.text
+    assert '"status": 503' in response.text
+
+
+def test_logs_requires_token(client: TestClient) -> None:
+    response = client.get("/api/v1/logs")
+
+    assert response.status_code == 401
+
+
+def test_logs_returns_metadata_without_content(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
+        return ollama_client.ChatResult("secret-answer", settings.ai_model)
+
+    monkeypatch.setattr(ollama_client, "chat", fake_chat)
+
+    chat_response = client.post(
+        "/api/v1/chat", headers=AUTH, json={"message": "private-question"}
+    )
+    assert chat_response.status_code == 200
+
+    response = client.get("/api/v1/logs?limit=50", headers=AUTH)
+
+    assert response.status_code == 200
+    entries = response.json()["entries"]
+    assert entries
+    assert all(
+        {"timestamp", "method", "path", "status", "duration_ms", "client"}
+        <= set(entry)
+        for entry in entries
+    )
+    assert any(entry["path"] == "/api/v1/chat" for entry in entries)
+    assert "private-question" not in response.text
+    assert "secret-answer" not in response.text
+    assert "test-token" not in response.text
+
+
+def test_logs_page_is_public_html(client: TestClient) -> None:
+    response = client.get("/api/v1/logs/view")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Family AI" in response.text
+
+
 @pytest.mark.asyncio
 async def test_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(api_access_token="test-token", ai_model="test-model")
@@ -176,7 +355,9 @@ async def test_concurrency_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
 
-    async def slow_chat(message: str, settings: Settings) -> ollama_client.ChatResult:
+    async def slow_chat(
+        messages: list[dict[str, str]], settings: Settings
+    ) -> ollama_client.ChatResult:
         started.set()
         await release.wait()
         return ollama_client.ChatResult("ok", settings.ai_model)

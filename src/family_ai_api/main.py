@@ -8,8 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from family_ai_api.config import get_settings
-from family_ai_api.routers import chat, health, models
+from family_ai_api.routers import chat, health, logs, models
 from family_ai_api.services.limits import SlidingWindowRateLimiter
+from family_ai_api.services.request_log import RequestLogEntry, RequestLogStore
 
 access_logger = logging.getLogger("family_ai_api.access")
 
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.chat_semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
     app.state.rate_limiter = SlidingWindowRateLimiter(settings.rate_limit_per_minute)
+    app.state.request_log = RequestLogStore(settings.request_log_size)
     yield
 
 
@@ -54,11 +56,24 @@ def create_app() -> FastAPI:
             response.status_code,
             duration_ms,
         )
+        store = getattr(request.app.state, "request_log", None)
+        if store is not None:
+            store.add(
+                RequestLogEntry(
+                    timestamp=RequestLogStore.now(),
+                    method=request.method,
+                    path=request.url.path,
+                    status=response.status_code,
+                    duration_ms=round(duration_ms, 1),
+                    client=request.client.host if request.client else "unknown",
+                )
+            )
         return response
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(models.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")
+    app.include_router(logs.router, prefix="/api/v1")
     return app
 
 
