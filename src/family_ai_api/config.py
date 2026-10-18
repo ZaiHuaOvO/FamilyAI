@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     api_access_token: str = ""
     request_timeout_seconds: float = 180.0
     max_message_chars: int = 6000
+    max_concurrent_requests: int = 2
+    rate_limit_per_minute: int = 30
+    max_request_bytes: int = 16384
 
 
 @lru_cache
