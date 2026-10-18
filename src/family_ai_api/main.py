@@ -7,8 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from family_ai_api.agent.actions import ActionStore
+from family_ai_api.agent.audit import AuditStore
 from family_ai_api.config import get_settings
-from family_ai_api.routers import chat, health, logs, memory, models, rag, tasks
+from family_ai_api.routers import agent, chat, health, logs, memory, models, rag, tasks
 from family_ai_api.services.limits import SlidingWindowRateLimiter
 from family_ai_api.services.request_log import RequestLogEntry, RequestLogStore
 
@@ -22,6 +24,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.rate_limiter = SlidingWindowRateLimiter(settings.rate_limit_per_minute)
     app.state.request_log = RequestLogStore(settings.request_log_size)
     app.state.memory_extraction_semaphore = asyncio.Semaphore(1)
+    app.state.agent_actions = ActionStore(settings.agent_action_ttl_seconds)
+    app.state.agent_audit = AuditStore(settings.agent_audit_size)
     yield
 
 
@@ -78,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(rag.router, prefix="/api/v1")
     app.include_router(memory.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
+    app.include_router(agent.router, prefix="/api/v1")
     return app
 
 

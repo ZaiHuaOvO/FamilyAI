@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     weather_longitude: float | None = None
     weather_location_name: str = ""
     weather_timeout_seconds: float = 10.0
+    agent_enabled: bool = True
+    agent_write_tools_enabled: bool = True
+    agent_max_tool_result_chars: int = 6000
+    agent_action_ttl_seconds: int = 300
+    agent_audit_size: int = 200
 
 
 @lru_cache
