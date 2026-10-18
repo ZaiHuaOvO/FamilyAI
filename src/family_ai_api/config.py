@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     max_history_messages: int = 20
     max_history_chars: int = 12000
     request_log_size: int = 200
+    embedding_model: str = "qwen3-embedding:0.6b"
+    kb_db_path: str = "data/knowledge.db"
+    kb_top_k: int = 4
+    kb_max_context_chars: int = 6000
+    kb_chunk_chars: int = 500
+    kb_chunk_overlap: int = 80
 
 
 @lru_cache

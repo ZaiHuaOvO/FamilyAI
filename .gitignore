@@ -22,3 +22,9 @@ wheels/
 *.log
 logs/
 .DS_Store
+
+# Local knowledge base (real documents and indexes are never committed)
+/data/
+/knowledge/
+*.db-wal
+*.db-shm

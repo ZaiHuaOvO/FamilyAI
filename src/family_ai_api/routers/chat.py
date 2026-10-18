@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from family_ai_api.config import Settings, get_settings
 from family_ai_api.security import require_token
 from family_ai_api.services import ollama_client
+from family_ai_api.services.chat_guard import acquire_slot, enforce_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -71,26 +72,6 @@ def build_messages(payload: ChatRequest, settings: Settings) -> list[dict[str, s
 
     messages.append({"role": "user", "content": message})
     return messages
-
-
-def enforce_rate_limit(request: Request, token_key: str) -> None:
-    if not request.app.state.rate_limiter.allow(token_key):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="rate limit exceeded",
-        )
-
-
-async def acquire_slot(request: Request) -> asyncio.Semaphore:
-    semaphore: asyncio.Semaphore = request.app.state.chat_semaphore
-    try:
-        await asyncio.wait_for(semaphore.acquire(), timeout=0.1)
-    except TimeoutError:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="too many concurrent requests",
-        ) from None
-    return semaphore
 
 
 @router.post("/chat", response_model=ChatResponse)
