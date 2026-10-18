@@ -1,0 +1,32 @@
+[project]
+name = "family-ai-api"
+version = "0.1.0"
+description = "家庭局域网内使用的本地大模型 FastAPI 服务"
+readme = "README.md"
+authors = [
+    { name = "ZFFFlower", email = "446840401@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.143.5",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.16.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
