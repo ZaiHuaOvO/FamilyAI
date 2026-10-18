@@ -37,12 +37,14 @@ async def chat(message: str, settings: Settings) -> ChatResult:
         "model": settings.ai_model,
         "messages": [{"role": "user", "content": message}],
         "stream": False,
+        "think": False,
     }
     url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
 
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.request_timeout_seconds)
+            timeout=httpx.Timeout(settings.request_timeout_seconds),
+            trust_env=False,
         ) as client:
             response = await asyncio.wait_for(
                 client.post(url, json=payload),
