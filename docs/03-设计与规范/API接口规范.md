@@ -1,6 +1,6 @@
-# API 接口规范（V3）
+# API 接口规范（V4）
 
-> 状态：**生效（V3 已实现）**  
+> 状态：**生效（V4 已实现）**  
 > 基础地址（本机）：`http://127.0.0.1:8000`  
 > 基础地址（局域网）：`http://<Mac局域网IP>:8000`
 
@@ -395,7 +395,99 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - 可通过 `AUTO_MEMORY_ENABLED=false` 关闭。
 - 自动提取不会把消息内容写入日志。
 
-## 11. 调用示例
+## 11. 任务 API
+
+任务保存在本机 SQLite；所有任务数据接口需要 Token。
+
+### 11.1 `POST /api/v1/tasks`
+
+```json
+{
+  "title": "交水电费",
+  "notes": "周五前完成",
+  "due_at": "2026-10-20T18:00:00+08:00"
+}
+```
+
+- `title` 非空，≤ 200 字符；`notes` ≤ 2000 字符。
+- `due_at` 可选，ISO 8601；无时区值按本机时区解释。
+- 成功返回 `201` 与任务对象。
+
+任务对象：
+
+```json
+{
+  "id": 1,
+  "title": "交水电费",
+  "notes": "周五前完成",
+  "due_at": "2026-10-20T18:00:00+08:00",
+  "done": false,
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+### 11.2 `GET /api/v1/tasks`
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `status` | string | `all` | `all` / `open` / `done` |
+| `due` | string | `all` | `all` / `today` / `overdue` |
+
+- `today`：到期日期等于本地今天。
+- `overdue`：到期日期早于本地今天（不会与 `today` 重复）。
+- 响应：`{"entries": [任务对象...]}`。
+
+### 11.3 `PATCH /api/v1/tasks/{id}`
+
+```json
+{
+  "title": "交水电费和燃气费",
+  "done": true,
+  "due_at": null
+}
+```
+
+- 至少提供一个字段；`due_at: null` 表示清空到期时间。
+- 不存在返回 `404`。
+
+### 11.4 `DELETE /api/v1/tasks/{id}`
+
+成功返回 `{"deleted": true}`；不存在返回 `404`。
+
+### 11.5 `GET /api/v1/tasks/view`
+
+任务管理页面，无需认证；页面不嵌入任务数据，输入 Token 后由浏览器调用上述接口。
+
+## 12. `GET /api/v1/briefing`
+
+用途：返回今日/逾期任务简报，可选天气。需要 Token。
+
+```json
+{
+  "date": "2026-10-18",
+  "counts": {"today": 1, "overdue": 1, "open": 3},
+  "tasks": {
+    "today": [任务对象...],
+    "overdue": [任务对象...]
+  },
+  "weather": {
+    "location": "北京",
+    "temperature_c": 10.9,
+    "description": "晴",
+    "high_c": 17.2,
+    "low_c": 10.3,
+    "precipitation_probability": 28.0
+  },
+  "weather_configured": true
+}
+```
+
+- 天气仅在配置 `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` 时请求；未配置时 `weather=null`、`weather_configured=false`。
+- 天气请求失败时 `weather=null`，任务简报仍正常返回。
+- 不主动推送；用户主动调用或打开页面查看。
+
+## 13. 调用示例
 
 健康检查：
 
@@ -480,13 +572,32 @@ curl http://127.0.0.1:8000/api/v1/chat \
 
 记忆管理页面：<http://127.0.0.1:8000/api/v1/memory/view>
 
+新增任务：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/tasks \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN' \
+  -d '{"title":"交水电费","due_at":"2026-10-20T18:00:00+08:00"}'
+```
+
+今日简报：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/briefing \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN'
+```
+
+任务管理页面：<http://127.0.0.1:8000/api/v1/tasks/view>
+
 > 示例中的 Token 必须替换为本地 `.env` 的真实值；不要把带真实 Token 的命令提交、截图或分享。
 
-## 12. 版本与兼容
+## 14. 版本与兼容
 
 - V1 路径固定为 `/api/v1`。
 - 新增可选字段不视为破坏性变更；删除字段、改变字段含义或改变认证方式需要新版本路径。
 - V1.1 新增可选 `history`、`/chat/stream`、`/logs` 与 `/logs/view`。
 - V2 新增 `/rag/query` 与 `/kb/stats`，不改变已有接口契约。
 - V3 新增 `/memory` CRUD、`/memory/view` 与聊天可选 `use_memory`；默认不注入记忆。
+- V4 新增 `/tasks` CRUD、`/tasks/view` 与 `/briefing`；天气为可选配置，不做主动通知。
 - `/chat` 保持非流式；需要逐字输出时使用 `/chat/stream`。
