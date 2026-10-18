@@ -1,6 +1,6 @@
-# API 接口规范（V1.1）
+# API 接口规范（V2）
 
-> 状态：**生效（V1.1 已实现）**  
+> 状态：**生效（V2 已实现）**  
 > 基础地址（本机）：`http://127.0.0.1:8000`  
 > 基础地址（局域网）：`http://<Mac局域网IP>:8000`
 
@@ -43,6 +43,7 @@ Authorization: Bearer <token>
 | 200 | 成功 |
 | 401 | 未认证或 Token 错误 |
 | 403 | 认证方案错误 / 禁止访问 |
+| 409 | 知识库为空或索引不兼容 |
 | 413 | 请求体过大 |
 | 422 | 参数校验失败 |
 | 429 | 并发或频率超限 |
@@ -229,7 +230,82 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - Token 仅保存在页面内存中，不写入 Cookie、localStorage 或服务端日志。
 - 页面通过 `Cache-Control: no-store` 禁止缓存。
 
-## 8. 调用示例
+## 8. `POST /api/v1/rag/query`
+
+用途：基于本地知识库回答问题，并返回来源。需要 Token。
+
+### 8.1 请求
+
+```json
+{
+  "message": "默认聊天模型是什么？",
+  "top_k": 4
+}
+```
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `message` | string | 是 | 去除首尾空白后非空；长度 ≤ `MAX_MESSAGE_CHARS` |
+| `top_k` | int | 否 | 1～10，默认使用 `KB_TOP_K`（4） |
+
+### 8.2 成功响应 `200`
+
+```json
+{
+  "answer": "默认聊天模型是 qwen3.5:4b。",
+  "model": "qwen3.5:4b",
+  "duration_ms": 1500,
+  "sources": [
+    {
+      "title": "Family AI 项目概览",
+      "path": "family-ai-overview.md",
+      "chunk_index": 0,
+      "score": 0.82
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `answer` | string | 基于检索资料生成的回答 |
+| `model` | string | 聊天模型 |
+| `duration_ms` | int | 模型生成耗时 |
+| `sources` | array | 检索到的来源元数据 |
+| `sources[].title` | string | 文档标题（首个 Markdown 标题或文件名） |
+| `sources[].path` | string | 相对路径，不含绝对路径 |
+| `sources[].chunk_index` | int | 片段序号 |
+| `sources[].score` | number | 余弦相似度 |
+
+### 8.3 错误
+
+| 情况 | 状态码 | detail |
+|---|---|---|
+| 无 / 错误 Token | 401 | `unauthorized` |
+| 消息为空 / 超长 / top_k 越界 | 422 | 校验错误 |
+| 知识库为空 | 409 | `knowledge base is empty` |
+| Embedding 服务不可用 | 503 | `embedding service unavailable` |
+| 索引维度不兼容 | 409 | `knowledge base index is incompatible; re-index required` |
+| 聊天模型不可用 / 超时 | 502/503/504 | 与 `/chat` 相同 |
+
+## 9. `GET /api/v1/kb/stats`
+
+用途：查看知识库统计。需要 Token。
+
+响应 `200`：
+
+```json
+{
+  "documents": 2,
+  "chunks": 5,
+  "last_indexed_at": "2026-10-18T15:00:00+00:00",
+  "embedding_model": "qwen3-embedding:0.6b"
+}
+```
+
+- 不返回数据库路径、文档正文或绝对路径。
+
+## 10. 调用示例
 
 健康检查：
 
@@ -271,11 +347,28 @@ curl "http://127.0.0.1:8000/api/v1/logs?limit=20" \
 
 日志查看页面：<http://127.0.0.1:8000/api/v1/logs/view>
 
+知识库问答：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/rag/query \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN' \
+  -d '{"message":"默认聊天模型是什么？"}'
+```
+
+知识库统计：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/kb/stats \
+  -H 'Authorization: Bearer YOUR_REAL_TOKEN'
+```
+
 > 示例中的 Token 必须替换为本地 `.env` 的真实值；不要把带真实 Token 的命令提交、截图或分享。
 
-## 9. 版本与兼容
+## 11. 版本与兼容
 
 - V1 路径固定为 `/api/v1`。
 - 新增可选字段不视为破坏性变更；删除字段、改变字段含义或改变认证方式需要新版本路径。
-- V1.1 新增可选 `history`、`/chat/stream`、`/logs` 与 `/logs/view`，不改变 `/chat` 的原有请求/响应契约。
+- V1.1 新增可选 `history`、`/chat/stream`、`/logs` 与 `/logs/view`。
+- V2 新增 `/rag/query` 与 `/kb/stats`，不改变已有接口契约。
 - `/chat` 保持非流式；需要逐字输出时使用 `/chat/stream`。
