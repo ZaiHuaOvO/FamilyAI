@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**阶段三（FastAPI 项目骨架与健康检查）已完成，等待阶段一/二安装 Ollama 与模型。**
+> 当前状态：**阶段1、2、4 已完成**——本机模型、带 Token 的聊天 API 与安全保护已可用；待阶段5（局域网访问）与阶段6（稳定性与性能基线）。
 
 ## 目标（V1）
 

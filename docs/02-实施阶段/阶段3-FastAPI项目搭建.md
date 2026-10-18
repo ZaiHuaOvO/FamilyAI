@@ -2,7 +2,8 @@
 
 > 状态：**已完成（2026-10-18）**  
 > 前置：阶段0 已完成  
-> 产出：可启动的最小 FastAPI 服务、健康检查、自动 OpenAPI 文档、基础测试
+> 产出：可启动的最小 FastAPI 服务、健康检查、自动 OpenAPI 文档、基础测试  
+> 后续：阶段4 已在此基础上补充聊天接口、认证与安全保护。
 
 ## 1. 目标
 
@@ -95,8 +96,7 @@ uv run uvicorn family_ai_api.main:app --reload --host 127.0.0.1 --port 8000
 
 ## 5. 下一阶段
 
-[阶段4：聊天 API 与安全](阶段4-聊天API与安全.md)。需要新增：
-
+[阶段4：聊天 API 与安全](阶段4-聊天API与安全.md)（已完成）。新增内容：
 - `routers/models.py`、`routers/chat.py`
 - `security.py`（Bearer Token，常量时间比较）
 - `services/ollama_client.py`（异步 httpx、超时、错误映射）

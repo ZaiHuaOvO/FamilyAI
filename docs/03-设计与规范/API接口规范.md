@@ -111,6 +111,7 @@ Authorization: Bearer <token>
 - 不接受客户端指定模型、Ollama 地址、`stream`、`system` 等参数。
 - 请求体默认上限 16KB（`MAX_REQUEST_BYTES`）。
 - V1 不保存历史，不提供多轮上下文；客户端如需多轮，需自行拼接后作为单条消息发送（后续版本再设计）。
+- 服务端对思考型模型关闭思考（`think: false`），只返回最终回答，不返回思考过程。
 
 ### 4.2 成功响应 `200`
 
