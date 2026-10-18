@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Family AI API",
         description="家庭局域网内使用的本地大模型 API",
-        version="0.1.0",
+        version="1.0.0",
         lifespan=lifespan,
     )
 
