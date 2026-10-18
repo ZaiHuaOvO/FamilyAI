@@ -1,6 +1,6 @@
 [project]
 name = "family-ai-api"
-version = "1.0.0"
+version = "1.1.0"
 description = "家庭局域网内使用的本地大模型 FastAPI 服务"
 readme = "README.md"
 authors = [
