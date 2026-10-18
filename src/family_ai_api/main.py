@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from family_ai_api.config import get_settings
-from family_ai_api.routers import chat, health, logs, memory, models, rag
+from family_ai_api.routers import chat, health, logs, memory, models, rag, tasks
 from family_ai_api.services.limits import SlidingWindowRateLimiter
 from family_ai_api.services.request_log import RequestLogEntry, RequestLogStore
 
@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(logs.router, prefix="/api/v1")
     app.include_router(rag.router, prefix="/api/v1")
     app.include_router(memory.router, prefix="/api/v1")
+    app.include_router(tasks.router, prefix="/api/v1")
     return app
 
 

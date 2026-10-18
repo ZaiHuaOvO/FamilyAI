@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     auto_memory_enabled: bool = True
     auto_memory_min_chars: int = 4
     auto_memory_max_items: int = 3
+    tasks_db_path: str = "data/tasks.db"
+    weather_latitude: float | None = None
+    weather_longitude: float | None = None
+    weather_location_name: str = ""
+    weather_timeout_seconds: float = 10.0
 
 
 @lru_cache
