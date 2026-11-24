@@ -29,7 +29,7 @@ struct SettingsView: View {
                 } header: {
                     Text("服务器")
                 } footer: {
-                    Text("填写 Mac 的局域网地址与成员 Token。Token 只保存在本机 Keychain；地址和流式开关保存在 UserDefaults。")
+                    Text("填写 Mac 的局域网地址，或 Tailscale 私有网络的完整 https 地址。Token 只保存在本机 Keychain；地址和流式开关保存在 UserDefaults。")
                 }
 
                 Section {

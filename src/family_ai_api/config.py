@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     app_host: str = "127.0.0.1"
     app_port: int = 8000
+    forwarded_allow_ips: str = "127.0.0.1,::1"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ai_model: str = "qwen3.5:4b"
     api_access_token: str = ""
@@ -56,6 +57,23 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def _loopback_proxies_only(cls, value: str) -> str:
+        entries = [item.strip() for item in value.split(",") if item.strip()]
+        if not entries:
+            raise ValueError("FORWARDED_ALLOW_IPS must not be empty")
+        if any(item == "*" for item in entries):
+            raise ValueError("FORWARDED_ALLOW_IPS must not trust every address")
+        unsupported = [item for item in entries if item not in {"127.0.0.1", "::1"}]
+        if unsupported:
+            raise ValueError("FORWARDED_ALLOW_IPS only accepts loopback addresses")
+        return ",".join(entries)
+
+    @property
+    def forwarded_allow_ips_list(self) -> list[str]:
+        return self.forwarded_allow_ips.split(",")
 
 
 @lru_cache

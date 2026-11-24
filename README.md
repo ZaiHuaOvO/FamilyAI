@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V6 已完成（`v6.0.0`）**；**V7 iOS 客户端已编译并在 Simulator 启动，待 Token/聊天手动验证**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V7 已完成（`v7.0.0`）**；**V8 外部访问进行中（V8.0/V8.1 已完成，V8.2 待 Tailscale 账号操作）**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -18,21 +18,22 @@
 - 多成员 Token；成员管理使用 CLI；记忆与任务按成员隔离。
 - 家庭 Wi-Fi 内设备可访问 FastAPI，Ollama 端口只监听本机。
 
-不包含：客户端 App、外部向量数据库（当前为 Ollama Embedding + SQLite + numpy）、主动提醒、公网访问。
+不包含：主动提醒、公网直接访问（V8 使用 Tailscale 私网）、外部向量数据库（当前为 Ollama Embedding + SQLite + numpy）。
 
 ## 架构
 
 ```text
 iPhone / iPad / 家庭内其他电脑
-              │ HTTP + API Token
-              ▼
-     FastAPI（本项目）
-     认证 · 校验 · 超时 · 限流 · 日志
-              │ 仅本机
-              ▼
-     Ollama 127.0.0.1:11434
-              ▼
-     本地开源大模型
+   │ 局域网：HTTP + Token
+   │ 外出：Tailscale Serve（HTTPS，仅 tailnet）+ Token
+   ▼
+FastAPI（本项目）
+认证 · 校验 · 超时 · 限流 · 日志
+   │ 仅本机
+   ▼
+Ollama 127.0.0.1:11434
+   ▼
+本地开源大模型
 ```
 
 ## 快速开始
@@ -52,8 +53,10 @@ uv run python -m family_ai_api
 开发时可使用热重载（会覆盖 `.env` 的监听配置）：
 
 ```bash
-uv run uvicorn family_ai_api.main:app --reload --host 127.0.0.1 --port 8000
+uv run uvicorn family_ai_api.main:app --reload --no-access-log --host 127.0.0.1 --port 8000
 ```
+
+`--no-access-log` 必须保留：uvicorn 默认访问日志会记录完整请求行，包括 `/api/v1/memory?query=...` 的查询串。应用自身的日志只记录 path。
 
 - 健康检查：<http://127.0.0.1:8000/api/v1/health>
 - 接口文档：<http://127.0.0.1:8000/docs>
@@ -133,6 +136,23 @@ open FamilyAI.xcodeproj
 
 工具调用：只读工具自动执行；`create_task`、`complete_task`、`add_memory` 会先返回 `pending_action`，需调用 `/api/v1/agent/actions/{action_id}/confirm` 才会执行。写工具可用 `AGENT_WRITE_TOOLS_ENABLED=false` 关闭。
 
+## 外部访问（V8，进行中）
+
+外出时通过 **Tailscale Serve** 访问，不使用 Funnel、公网隧道或端口映射：
+
+```bash
+# 在 Mac 上启用（需先安装 Tailscale、启用 MagicDNS 与 HTTPS Certificates）
+tailscale serve --bg 8000
+tailscale serve status
+tailscale funnel status   # 必须为 off
+```
+
+iOS 设置中的服务器地址填写完整 HTTPS 地址：`https://<machine>.<tailnet>.ts.net`。局域网地址仍可用于过渡期；V8.2 验证 Serve 后再迁移绑定到 `127.0.0.1`。
+
+- 阶段与验收：[V8 外部访问](docs/02-实施阶段/V8-外部访问.md)
+- 方案决策：[V8 外部访问方案](docs/06-决策记录/V8-外部访问方案.md)
+- 操作步骤：[V8 运维手册](docs/03-设计与规范/V8-外部访问运维手册.md)
+
 ## 测试与检查
 
 ```bash
@@ -150,7 +170,10 @@ uv run ruff check .
 - [V4 家庭任务与提醒](docs/02-实施阶段/V4-家庭任务与提醒.md)
 - [V5 工具调用](docs/02-实施阶段/V5-工具调用.md)
 - [V6 家庭成员权限](docs/02-实施阶段/V6-家庭成员权限.md)
-- [V7 Apple 客户端（代码完成）](docs/02-实施阶段/V7-Apple客户端.md)
+- [V7 Apple 客户端](docs/02-实施阶段/V7-Apple客户端.md)
+- [V8 外部访问](docs/02-实施阶段/V8-外部访问.md)
+- [V8 外部访问方案](docs/06-决策记录/V8-外部访问方案.md)
+- [V8 运维手册](docs/03-设计与规范/V8-外部访问运维手册.md)
 - [iOS 客户端说明](ios/README.md)
 - [API 接口规范](docs/03-设计与规范/API接口规范.md)
 - [原始开发指南（归档）](docs/00-归档/原始开发文档-V1.1.md)
@@ -160,3 +183,6 @@ uv run ruff check .
 - `.env`、真实 Token、私人聊天记录和家庭文件不得提交到 Git。
 - 对局域网提供服务的唯一入口是 FastAPI；不要暴露 Ollama 的 11434 端口。
 - 不在 URL 查询参数中传递 Token。
+- 外部访问只允许 Tailscale Serve；禁止 Funnel、ngrok、Cloudflare 公网隧道和路由器端口映射。
+- `FORWARDED_ALLOW_IPS` 只允许回环地址；禁止 `*`。
+- uvicorn access log 必须关闭；应用日志不记录查询串、Token、聊天正文。

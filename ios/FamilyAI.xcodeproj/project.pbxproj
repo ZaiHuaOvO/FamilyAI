@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		02B661DC50D02C4F4130EE8F /* FamilyAIUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7ADC61DF5D009004F526162 /* FamilyAIUITests.swift */; };
+		0F0EB0AF4044B754AB829AF3 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A9CA8F00E16FB93FFD14FF /* AppSettingsTests.swift */; };
 		22467DFADCF05E092B403133 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BD66B4C2A7AFC2E9C30E1960 /* Assets.xcassets */; };
 		3CF8F736B83578BA9F80EBD3 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4483F1E0919A584F31870F28 /* KeychainStoreTests.swift */; };
 		4EB773519396C4A40E5CC1D3 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449AD4A93241E5889632D518 /* RootView.swift */; };
@@ -40,6 +41,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		08A9CA8F00E16FB93FFD14FF /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
 		17B4C6A60364FFFD7504CE47 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2878C8B19BA8E32DFB0BD9D5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		2C159FCD14BFB154C80E323C /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 		90526C31FF6FD46990318C43 /* FamilyAITests */ = {
 			isa = PBXGroup;
 			children = (
+				08A9CA8F00E16FB93FFD14FF /* AppSettingsTests.swift */,
 				4483F1E0919A584F31870F28 /* KeychainStoreTests.swift */,
 			);
 			path = FamilyAITests;
@@ -245,6 +248,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0F0EB0AF4044B754AB829AF3 /* AppSettingsTests.swift in Sources */,
 				3CF8F736B83578BA9F80EBD3 /* KeychainStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

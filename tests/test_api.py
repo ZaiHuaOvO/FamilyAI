@@ -284,6 +284,18 @@ def test_rate_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None
     assert second.status_code == 429
 
 
+def test_access_log_does_not_contain_query_string(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    marker = "query-marker-7b1c"
+
+    with caplog.at_level(logging.INFO, logger="family_ai_api.access"):
+        response = client.get(f"/api/v1/health?query={marker}")
+
+    assert response.status_code == 200
+    assert marker not in caplog.text
+
+
 def test_access_log_does_not_contain_token_or_message(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

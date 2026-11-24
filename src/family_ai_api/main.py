@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from family_ai_api.agent.actions import ActionStore
 from family_ai_api.agent.audit import AuditStore
@@ -111,6 +112,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Application-level so both `python -m family_ai_api` and plain uvicorn
+    # honor the validated loopback-only trust list.
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=settings.forwarded_allow_ips_list,
+    )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
 
     @app.middleware("http")

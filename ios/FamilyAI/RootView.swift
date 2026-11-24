@@ -49,7 +49,7 @@ private struct SetupView: View {
                 .foregroundStyle(.tint)
             Text("连接家庭 AI")
                 .font(.title2.bold())
-            Text("在设置中填写 Mac 的局域网地址和成员 Token。Token 只保存在本机 Keychain。")
+            Text("在设置中填写 Mac 的局域网地址或 Tailscale 私有网络地址，以及成员 Token。Token 只保存在本机 Keychain。")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             Button("打开设置") {

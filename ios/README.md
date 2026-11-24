@@ -41,6 +41,8 @@ uv run python -m family_ai_api.members.cli create --name iphone --role member
 3. 在 App 设置中填写服务器地址与 Token，点击“测试连接”。
 4. 返回聊天页开始对话。
 
+外出访问：先按 [V8 运维手册](../docs/03-设计与规范/V8-外部访问运维手册.md) 启用 Tailscale Serve，然后在设置中填写完整 HTTPS 地址 `https://<machine>.<tailnet>.ts.net`。不要使用 Tailscale Funnel。裸 `*.ts.net` 地址会自动补 `https://`；其他地址仍默认 `http://`。
+
 > Token 只保存在 iOS Keychain；服务器地址与流式开关保存在 UserDefaults。Token 轮换或撤销后，App 会收到 401，需要在设置中更新 Token。Keychain 访问依赖 `FamilyAI.entitlements` 的 `keychain-access-groups`；用 `CODE_SIGNING_ALLOWED=NO` 构建的安装包无法保存 Token。
 
 ## 网络与安全
@@ -71,7 +73,7 @@ xcodebuild test -project FamilyAI.xcodeproj -scheme FamilyAI \
   -only-testing:FamilyAITests
 ```
 
-- `FamilyAITests`：Keychain 保存/读取/删除。
+- `FamilyAITests`：Keychain 保存/读取/删除；服务器地址归一化（https、裸 ts.net、局域网 http、非法 scheme）。
 - `FamilyAIUITests`：连接、流式/非流式聊天、401 提示、重启后 Token 保持。
   UI 测试无法从运行环境取得 Token，需要先启动本机回环助手：
 
@@ -94,9 +96,9 @@ FAMILYAI_UI_TOKEN=<临时成员 Token> python3 scripts/ui-test-credentials.py
 | `APIClient.swift` | HTTP 与 SSE 解析 |
 | `Models.swift` | 请求/响应模型 |
 | `KeychainStore.swift` | Token 安全存储 |
-| `AppSettings.swift` | 配置持久化 |
+| `AppSettings.swift` | 配置持久化与地址归一化 |
 | `FamilyAI.entitlements` | Keychain 访问组 |
-| `FamilyAITests/` | Keychain 单元测试 |
+| `FamilyAITests/` | Keychain 与地址归一化单元测试 |
 | `FamilyAIUITests/` | 端到端 UI 测试 |
 
 ## 已知限制
@@ -104,3 +106,4 @@ FAMILYAI_UI_TOKEN=<临时成员 Token> python3 scripts/ui-test-credentials.py
 - 首版不包含 Widget、通知、记忆/任务/知识库界面。
 - 流式取消依赖 Task 取消；服务端会释放并发槽位。
 - 真机签名、局域网权限与 ATS 尚未验证。
+- 使用 Tailscale 时同一时间只能启用一个 VPN；后台挂起或 On Demand 行为需真机验证。

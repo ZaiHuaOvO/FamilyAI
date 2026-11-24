@@ -40,11 +40,27 @@ final class AppSettings: ObservableObject {
     }
 
     var normalizedBaseURL: URL? {
-        let raw = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty else { return nil }
-        guard var components = URLComponents(string: raw) else { return nil }
-        if components.scheme == nil {
-            components.scheme = "http"
+        Self.normalizeBaseURL(baseURL)
+    }
+
+    static func normalizeBaseURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        var candidate = trimmed
+        if !trimmed.contains("://") {
+            let host = trimmed.split(separator: "/", maxSplits: 1).first ?? ""
+            let hostname = host.split(separator: ":", maxSplits: 1).first ?? ""
+            let scheme = hostname.hasSuffix(".ts.net") ? "https" : "http"
+            candidate = "\(scheme)://\(trimmed)"
+        }
+
+        guard var components = URLComponents(string: candidate),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host,
+              !host.isEmpty else {
+            return nil
         }
         return components.url
     }
