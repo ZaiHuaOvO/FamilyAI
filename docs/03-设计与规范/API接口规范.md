@@ -1,6 +1,6 @@
-# API 接口规范（V5）
+# API 接口规范（V6）
 
-> 状态：**生效（V5 已实现）**  
+> 状态：**生效（V6 已实现）**  
 > 基础地址（本机）：`http://127.0.0.1:8000`  
 > 基础地址（局域网）：`http://<Mac局域网IP>:8000`
 
@@ -22,9 +22,10 @@ Authorization: Bearer <token>
 
 无需认证的页面：`/api/v1/logs/view`、`/api/v1/memory/view`、`/api/v1/tasks/view`，以及 FastAPI 自动生成的 `/docs`、`/redoc`、`/openapi.json`。这些页面本身不嵌入数据；页面内的数据请求仍需 Token。
 
-- Token 由服务端 `.env` 配置，客户端不得通过 URL 查询参数传递。
-- 缺失、格式错误或 Token 不匹配：`401 Unauthorized`。
-- 服务端未配置 Token：受保护接口返回 `503`，不降级为匿名访问。
+- Token 由成员 Token 或 `.env` 的引导 Token（首次启动映射为 `admin`）提供；客户端不得通过 URL 查询参数传递。
+- 缺失、格式错误、Token 不匹配或成员已撤销：`401 Unauthorized`。
+- 非管理员访问 `/api/v1/logs` 或 `/api/v1/agent/audit`：`403 Forbidden`。
+- 服务端没有任何成员且未配置引导 Token：受保护接口返回 `503`，不降级为匿名访问。
 
 ### 1.3 错误格式
 
@@ -71,6 +72,32 @@ Authorization: Bearer <token>
 
 - 不返回版本、模型、配置、路径、进程信息。
 - 不触发模型加载。
+
+## 2.1 `GET /api/v1/me`
+
+用途：返回当前 Token 对应的成员。需要 Token。
+
+```json
+{
+  "id": 2,
+  "name": "alice",
+  "role": "member"
+}
+```
+
+## 2.2 成员管理（CLI）
+
+成员不通过 HTTP 管理，使用本机命令：
+
+```bash
+uv run python -m family_ai_api.members.cli create --name alice --role member
+uv run python -m family_ai_api.members.cli list
+uv run python -m family_ai_api.members.cli rotate --name alice
+uv run python -m family_ai_api.members.cli revoke --name alice
+```
+
+- Token 只在 create/rotate 时打印一次。
+- 轮换后旧 Token 立即失效；撤销后该成员所有请求返回 401。
 
 ## 3. `GET /api/v1/models`
 
@@ -200,7 +227,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 ## 6. `GET /api/v1/logs`
 
-用途：查看最近的请求元数据。需要 Token。
+用途：查看最近的请求元数据。**仅 admin** 成员可访问。
 
 ### 6.1 请求参数
 
@@ -313,14 +340,15 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 ## 10. 记忆 API
 
-长期记忆为全家共享；聊天默认不使用，需显式 `use_memory: true`。所有记忆数据接口需要 Token。
+记忆默认**私有**，可显式设为全家共享。列表/搜索返回当前成员的私有记忆 + 共享记忆；只有 owner 可以修改或删除。所有记忆数据接口需要 Token。
 
 ### 10.1 `POST /api/v1/memory`
 
 ```json
 {
   "content": "周末家庭活动优先安排户外。",
-  "tags": ["家庭", "周末"]
+  "tags": ["家庭", "周末"],
+  "shared": false
 }
 ```
 
@@ -332,6 +360,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
   "content": "周末家庭活动优先安排户外。",
   "tags": ["家庭", "周末"],
   "source": "explicit",
+  "shared": false,
   "created_at": "2026-10-18T15:07:43+00:00",
   "updated_at": "2026-10-18T15:07:43+00:00",
   "score": null
@@ -340,7 +369,8 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 - `content` 去除首尾空白后非空，长度 ≤ `MEMORY_MAX_CHARS`（默认 500）。
 - 标签最多 5 个，每个最多 20 字符。
-- 相同内容返回 `409 memory already exists`。
+- `shared` 默认 `false`；为 `true` 时全家可见。
+- 同一成员重复内容返回 `409 memory already exists`；不同成员可以拥有相同内容。
 - 未配置 Embedding 服务时返回 `503`。
 
 ### 10.2 `GET /api/v1/memory`
@@ -360,6 +390,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
       "content": "周末家庭活动优先安排户外。",
       "tags": ["家庭", "周末"],
       "source": "explicit",
+      "shared": false,
       "created_at": "...",
       "updated_at": "...",
       "score": 0.82
@@ -368,6 +399,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 }
 ```
 
+- 返回当前成员自己的私有记忆 + 全家共享记忆。
 - 不提供 `query` 时按更新时间倒序返回。
 - `score` 仅搜索时出现，其他情况为 `null`。
 
@@ -376,17 +408,18 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 ```json
 {
   "content": "周末家庭活动优先安排户外或亲子活动。",
-  "tags": ["家庭"]
+  "tags": ["家庭"],
+  "shared": true
 }
 ```
 
-- 至少提供一个字段。
+- 至少提供一个字段；`shared` 控制私有/共享。
 - 修改内容时重新生成向量；与已有记忆重复返回 `409`。
-- 不存在返回 `404`。
+- 只有 owner 可以修改；不存在或非 owner 返回 `404`。
 
 ### 10.4 `DELETE /api/v1/memory/{memory_id}`
 
-成功返回 `{"deleted": true}`；不存在返回 `404`。删除为永久操作。
+成功返回 `{"deleted": true}`；不存在或非 owner 返回 `404`。删除为永久操作。
 
 ### 10.5 `GET /api/v1/memory/view`
 
@@ -394,7 +427,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 ### 10.6 自动提取
 
-- 由聊天请求触发，后台执行，不阻塞回答。
+- 由聊天请求触发，后台执行，不阻塞回答；记忆归属于当前成员，默认私有。
 - 只读取本轮用户消息；严格限制为长期稳定的个人事实/偏好/约定。
 - 最多 3 条，每条最多 200 字；来源标记为 `auto`。
 - 可通过 `AUTO_MEMORY_ENABLED=false` 关闭。
@@ -402,7 +435,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 ## 11. 任务 API
 
-任务保存在本机 SQLite；所有任务数据接口需要 Token。
+任务保存在本机 SQLite，默认私有、可共享。列表/简报返回当前成员自己的任务 + 共享任务；只有 owner 可以修改、完成或删除。
 
 ### 11.1 `POST /api/v1/tasks`
 
@@ -410,12 +443,14 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 {
   "title": "交水电费",
   "notes": "周五前完成",
-  "due_at": "2026-10-20T18:00:00+08:00"
+  "due_at": "2026-10-20T18:00:00+08:00",
+  "shared": false
 }
 ```
 
 - `title` 非空，≤ 200 字符；`notes` ≤ 2000 字符。
 - `due_at` 可选，ISO 8601；无时区值按本机时区解释。
+- `shared` 默认 `false`；为 `true` 时全家可见。
 - 成功返回 `201` 与任务对象。
 
 任务对象：
@@ -427,6 +462,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
   "notes": "周五前完成",
   "due_at": "2026-10-20T18:00:00+08:00",
   "done": false,
+  "shared": false,
   "created_at": "...",
   "updated_at": "..."
 }
@@ -442,6 +478,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - `today`：到期日期等于本地今天。
 - `overdue`：到期日期早于本地今天（不会与 `today` 重复）。
 - `due=today|overdue` 只作用于未完成任务；已完成任务请用 `status=done` 查询。
+- 返回当前成员自己的任务 + 共享任务。
 - 响应：`{"entries": [任务对象...]}`。
 
 ### 11.3 `PATCH /api/v1/tasks/{task_id}`
@@ -450,16 +487,17 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 {
   "title": "交水电费和燃气费",
   "done": true,
-  "due_at": null
+  "due_at": null,
+  "shared": true
 }
 ```
 
-- 至少提供一个字段；`due_at: null` 表示清空到期时间。
-- 不存在返回 `404`。
+- 至少提供一个字段；`due_at: null` 表示清空到期时间；`shared` 控制私有/共享。
+- 只有 owner 可以修改；不存在或非 owner 返回 `404`。
 
 ### 11.4 `DELETE /api/v1/tasks/{task_id}`
 
-成功返回 `{"deleted": true}`；不存在返回 `404`。
+成功返回 `{"deleted": true}`；不存在或非 owner 返回 `404`。
 
 ### 11.5 `GET /api/v1/tasks/view`
 
@@ -467,7 +505,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 ## 12. `GET /api/v1/briefing`
 
-用途：返回今日/逾期任务简报，可选天气。需要 Token。
+用途：返回当前成员的今日/逾期任务简报，可选天气。需要 Token。
 
 ```json
 {
@@ -501,7 +539,7 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
 |---|---|---|---|
 | `POST` | `/api/v1/agent/chat` | 规划并回答问题 | 是 |
 | `GET` | `/api/v1/agent/tools` | 列出白名单工具 | 是 |
-| `GET` | `/api/v1/agent/audit` | 最近工具审计 | 是 |
+| `GET` | `/api/v1/agent/audit` | 最近工具审计（仅 admin） | 是 |
 | `POST` | `/api/v1/agent/actions/{action_id}/confirm` | 确认并执行写操作 | 是 |
 | `POST` | `/api/v1/agent/actions/{action_id}/cancel` | 取消待执行动作 | 是 |
 
@@ -559,7 +597,7 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
 
 ### 13.3 `GET /api/v1/agent/audit?limit=50`
 
-返回最近工具调用审计：
+仅 admin。返回最近工具调用审计：
 
 ```json
 {
@@ -570,7 +608,8 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
       "write": true,
       "status": "ok",
       "duration_ms": 0.9,
-      "action_id": "bLQ5rZ0OoCnd3sRxTWkmFnfN"
+      "action_id": "bLQ5rZ0OoCnd3sRxTWkmFnfN",
+      "member_id": 2
     }
   ]
 }
@@ -743,4 +782,5 @@ curl "http://127.0.0.1:8000/api/v1/agent/audit?limit=20" \
 - V3 新增 `/memory` CRUD、`/memory/view` 与聊天可选 `use_memory`；默认不注入记忆。
 - V4 新增 `/tasks` CRUD、`/tasks/view` 与 `/briefing`；天气为可选配置，不做主动通知。
 - V5 新增 `/agent` 工具调用：只读工具自动执行，写工具需要二次确认；不接外部服务。
+- V6 新增成员 Token、`/me`、记忆/任务私有与共享；`/logs` 与 `/agent/audit` 仅 admin。
 - `/chat` 保持非流式；需要逐字输出时使用 `/chat/stream`。

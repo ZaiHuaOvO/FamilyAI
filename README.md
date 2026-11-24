@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V5 已完成（`v5.0.0`）**——本地模型、流式聊天、请求日志、知识库/RAG、长期记忆、家庭任务/简报与受控工具调用均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V6 已完成（`v6.0.0`）**——本地模型、流式聊天、知识库/RAG、长期记忆、家庭任务、工具调用与家庭成员权限均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -10,11 +10,12 @@
 - 通过带 Token 认证的 HTTP API 调用模型。
 - 非流式与 SSE 流式聊天。
 - 客户端携带多轮对话历史（服务端不持久化）。
-- 请求日志查询接口与查看页面（只记录元数据）。
+- 请求日志查询接口与查看页面（只记录元数据，仅 admin 可读）。
 - 本地 Markdown/TXT 知识库问答（返回来源）。
-- 长期记忆：显式新增/编辑/删除 + 自动提取；聊天默认不使用，需 `use_memory: true`。
-- 家庭任务：CRUD、今日/逾期筛选、手动简报、可选天气、管理页面。
-- 工具调用：任务/知识库/记忆的只读工具自动执行；写工具需要 API 二次确认。
+- 长期记忆：私有/共享；显式新增/编辑/删除 + 自动提取。
+- 家庭任务：私有/共享、CRUD、今日/逾期筛选、手动简报、可选天气、管理页面。
+- 工具调用：只读工具自动执行；写工具需要 API 二次确认。
+- 多成员 Token；成员管理使用 CLI；记忆与任务按成员隔离。
 - 家庭 Wi-Fi 内设备可访问 FastAPI，Ollama 端口只监听本机。
 
 不包含：客户端 App、外部向量数据库（当前为 Ollama Embedding + SQLite + numpy）、主动提醒、公网访问。
@@ -65,11 +66,12 @@ uv run uvicorn family_ai_api.main:app --reload --host 127.0.0.1 --port 8000
 | 方法 | 路径 | 说明 | 认证 |
 |---|---|---|---|
 | GET | `/api/v1/health` | 健康检查 | 否 |
+| GET | `/api/v1/me` | 当前成员 | 是 |
 | GET | `/api/v1/models` | 服务允许的模型 | 是 |
 | POST | `/api/v1/chat` | 非流式聊天，可带 `history` | 是 |
 | POST | `/api/v1/chat/stream` | SSE 流式聊天 | 是 |
-| GET | `/api/v1/logs` | 最近请求元数据 | 是 |
-| GET | `/api/v1/logs/view` | 日志查看页面 | 页面可访问，数据需 Token |
+| GET | `/api/v1/logs` | 最近请求元数据（仅 admin） | 是 |
+| GET | `/api/v1/logs/view` | 日志查看页面 | 页面可访问，数据需 admin Token |
 | POST | `/api/v1/rag/query` | 知识库问答，返回来源 | 是 |
 | GET | `/api/v1/kb/stats` | 知识库文档/片段统计 | 是 |
 | POST | `/api/v1/memory` | 新增记忆 | 是 |
@@ -85,7 +87,7 @@ uv run uvicorn family_ai_api.main:app --reload --host 127.0.0.1 --port 8000
 | GET | `/api/v1/briefing` | 今日/逾期简报 + 可选天气 | 是 |
 | POST | `/api/v1/agent/chat` | 工具规划与回答 | 是 |
 | GET | `/api/v1/agent/tools` | 白名单工具 | 是 |
-| GET | `/api/v1/agent/audit` | 工具调用审计 | 是 |
+| GET | `/api/v1/agent/audit` | 工具调用审计（仅 admin） | 是 |
 | POST | `/api/v1/agent/actions/{action_id}/confirm` | 确认写操作 | 是 |
 | POST | `/api/v1/agent/actions/{action_id}/cancel` | 取消写操作 | 是 |
 
@@ -105,6 +107,15 @@ uv run python -m family_ai_api.knowledge.ingest knowledge.example
 ```
 
 > 真实资料目录 `knowledge/` 与索引 `data/` 已被 `.gitignore` 忽略；示例资料在 `knowledge.example/`。
+
+成员管理（Token 只打印一次；现有 `.env` Token 首次启动映射为 admin）：
+
+```bash
+uv run python -m family_ai_api.members.cli create --name alice --role member
+uv run python -m family_ai_api.members.cli list
+uv run python -m family_ai_api.members.cli rotate --name alice
+uv run python -m family_ai_api.members.cli revoke --name alice
+```
 
 可选天气：在 `.env` 中设置 `WEATHER_LATITUDE`、`WEATHER_LONGITUDE` 与 `WEATHER_LOCATION_NAME`，简报会使用 Open-Meteo 获取天气；留空即禁用。
 
@@ -126,6 +137,7 @@ uv run ruff check .
 - [V3 长期记忆](docs/02-实施阶段/V3-长期记忆.md)
 - [V4 家庭任务与提醒](docs/02-实施阶段/V4-家庭任务与提醒.md)
 - [V5 工具调用](docs/02-实施阶段/V5-工具调用.md)
+- [V6 家庭成员权限](docs/02-实施阶段/V6-家庭成员权限.md)
 - [API 接口规范](docs/03-设计与规范/API接口规范.md)
 - [原始开发指南（归档）](docs/00-归档/原始开发文档-V1.1.md)
 
