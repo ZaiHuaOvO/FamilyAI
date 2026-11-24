@@ -95,6 +95,7 @@ xcodebuild test -project FamilyAI.xcodeproj -scheme FamilyAI \
 - [x] 无 Token/错误 Token 显示 401 提示。
 - [x] Keychain 跨进程重启保持 Token。
 - [x] 局域网 HTTP 访问正常（ATS 未拦截）。
+- [x] 用户在 Simulator 中填入自己的成员 Token，测试连接成功并收到真实回复（2026-11-24）。
 
 ## 未验证 / 已知限制
 
