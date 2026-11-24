@@ -1,6 +1,6 @@
 # Family AI 项目规则
 
-- 当前阶段：V7 已完成（`v7.0.0`）；V8 外部访问进行中：Serve、回环绑定、ACL、key expiry、Tailscale/Ollama/FastAPI 登录自启动已完成，真实 iPhone App 与真实重启待完成。以 `docs/进度追踪.md` 为准。
+- 当前阶段：V7 已完成（`v7.0.0`）；V8 外部访问进行中：V8.2 完成，V8.3 已通过真实重启、鉴权与基础限额；真实 iPhone App、429、长 SSE、admin 轮换与回退待完成。以 `docs/进度追踪.md` 为准。
 - 先阅读 README、docs 和当前代码，再给出改动计划。
 - 一次只实施一个能独立验收的阶段；未经用户批准，不提前开发后续版本能力（包括 iOS 客户端、主动通知、公网访问）。
 - 模型推理由本机 Ollama 负责；Ollama 原始 API 仅供本机访问。
