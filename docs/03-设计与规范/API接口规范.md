@@ -8,17 +8,19 @@
 
 ### 1.1 协议
 
-- 仅支持 HTTP（V1 局域网内）；后续可评估私有网络或反向代理提供 TLS。
-- 请求与响应均为 `application/json; charset=utf-8`。
+- 仅支持 HTTP（局域网内）；后续可评估私有网络或反向代理提供 TLS。
+- JSON 响应为 `application/json`（正文 UTF-8）；流式聊天为 `text/event-stream`。
 - 时间单位：毫秒（`duration_ms`）。
 
 ### 1.2 认证
 
-除健康检查外，所有接口要求：
+除健康检查与以下只读页面外，所有数据接口要求：
 
 ```http
 Authorization: Bearer <token>
 ```
+
+无需认证的页面：`/api/v1/logs/view`、`/api/v1/memory/view`、`/api/v1/tasks/view`，以及 FastAPI 自动生成的 `/docs`、`/redoc`、`/openapi.json`。这些页面本身不嵌入数据；页面内的数据请求仍需 Token。
 
 - Token 由服务端 `.env` 配置，客户端不得通过 URL 查询参数传递。
 - 缺失、格式错误或 Token 不匹配：`401 Unauthorized`。
@@ -42,14 +44,16 @@ Authorization: Bearer <token>
 |---|---|
 | 200 | 成功 |
 | 401 | 未认证或 Token 错误 |
-| 403 | 认证方案错误 / 禁止访问 |
-| 409 | 知识库为空或索引不兼容 |
+| 403 | 禁止访问（如 Agent 写工具被禁用） |
+| 409 | 冲突（知识库为空/不兼容、记忆重复、Agent 动作冲突） |
 | 413 | 请求体过大 |
 | 422 | 参数校验失败 |
 | 429 | 并发或频率超限 |
 | 502 | 上游（Ollama）返回错误 |
 | 503 | 模型服务不可用 / 服务未配置认证 |
 | 504 | 上游超时 |
+
+> OpenAPI 自动生成会为受保护接口补充 401/503，为模型接口补充 429/502/504，并补充 413/404/409 等通用错误；端点特有的错误语义以本文档各接口的错误表为准。
 
 ## 2. `GET /api/v1/health`
 
@@ -136,7 +140,7 @@ Authorization: Bearer <token>
 |---|---|---|
 | `message` | string | 模型回答 |
 | `model` | string | 实际使用的模型（服务端配置） |
-| `duration_ms` | int | 从收到请求到得到上游完整响应的耗时 |
+| `duration_ms` | int | 模型调用耗时（不含记忆检索、限流和并发排队） |
 
 ### 4.3 错误响应
 
@@ -144,7 +148,8 @@ Authorization: Bearer <token>
 |---|---|---|
 | 无 / 错误 Token | 401 | `unauthorized` |
 | 认证未配置 | 503 | `service authentication is not configured` |
-| `message` 缺失、空、仅空格 | 422 | `message must not be empty` |
+| `message` 缺失 | 422 | FastAPI 默认结构 |
+| `message` 为空 / 仅空格 | 422 | `message must not be empty` |
 | `message` 超长 | 422 | `message is too long` |
 | 历史条数超限 | 422 | `history is too long` |
 | 历史总字符超限 | 422 | `history is too large` |
@@ -366,7 +371,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - 不提供 `query` 时按更新时间倒序返回。
 - `score` 仅搜索时出现，其他情况为 `null`。
 
-### 10.3 `PATCH /api/v1/memory/{id}`
+### 10.3 `PATCH /api/v1/memory/{memory_id}`
 
 ```json
 {
@@ -379,7 +384,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - 修改内容时重新生成向量；与已有记忆重复返回 `409`。
 - 不存在返回 `404`。
 
-### 10.4 `DELETE /api/v1/memory/{id}`
+### 10.4 `DELETE /api/v1/memory/{memory_id}`
 
 成功返回 `{"deleted": true}`；不存在返回 `404`。删除为永久操作。
 
@@ -436,9 +441,10 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 
 - `today`：到期日期等于本地今天。
 - `overdue`：到期日期早于本地今天（不会与 `today` 重复）。
+- `due=today|overdue` 只作用于未完成任务；已完成任务请用 `status=done` 查询。
 - 响应：`{"entries": [任务对象...]}`。
 
-### 11.3 `PATCH /api/v1/tasks/{id}`
+### 11.3 `PATCH /api/v1/tasks/{task_id}`
 
 ```json
 {
@@ -451,7 +457,7 @@ data: {"model": "qwen3.5:4b", "duration_ms": 3449}
 - 至少提供一个字段；`due_at: null` 表示清空到期时间。
 - 不存在返回 `404`。
 
-### 11.4 `DELETE /api/v1/tasks/{id}`
+### 11.4 `DELETE /api/v1/tasks/{task_id}`
 
 成功返回 `{"deleted": true}`；不存在返回 `404`。
 
@@ -496,8 +502,8 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
 | `POST` | `/api/v1/agent/chat` | 规划并回答问题 | 是 |
 | `GET` | `/api/v1/agent/tools` | 列出白名单工具 | 是 |
 | `GET` | `/api/v1/agent/audit` | 最近工具审计 | 是 |
-| `POST` | `/api/v1/agent/actions/{id}/confirm` | 确认并执行写操作 | 是 |
-| `POST` | `/api/v1/agent/actions/{id}/cancel` | 取消待执行动作 | 是 |
+| `POST` | `/api/v1/agent/actions/{action_id}/confirm` | 确认并执行写操作 | 是 |
+| `POST` | `/api/v1/agent/actions/{action_id}/cancel` | 取消待执行动作 | 是 |
 
 ### 13.1 `POST /api/v1/agent/chat`
 
@@ -573,7 +579,7 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
 - 只包含元数据，不包含参数或结果正文。
 - 保存在内存中，重启后清空。
 
-### 13.4 `POST /api/v1/agent/actions/{id}/confirm`
+### 13.4 `POST /api/v1/agent/actions/{action_id}/confirm`
 
 成功：
 
@@ -581,15 +587,22 @@ Agent 使用服务端白名单：4 个只读工具、3 个写工具。写工具�
 {
   "executed": true,
   "tool": "create_task",
-  "result": { "id": 4, "title": "明天买菜", "due_at": "2026-10-19", "done": false }
+  "result": {
+    "id": 4,
+    "title": "明天买菜",
+    "notes": "",
+    "due_at": "2026-10-19T00:00:00+08:00",
+    "done": false
+  }
 }
 ```
 
+- `result` 为 `{id, title, notes, due_at, done}`（`complete_task` 同样返回任务对象）。
 - 动作不存在、已使用或过期：`404`。
 - 写工具被禁用：`403`。
 - 执行失败：`409`（如任务不存在、记忆已存在）。
 
-### 13.5 `POST /api/v1/agent/actions/{id}/cancel`
+### 13.5 `POST /api/v1/agent/actions/{action_id}/cancel`
 
 成功返回 `{"cancelled": true}`；不存在或过期返回 `404`。
 

@@ -109,7 +109,7 @@ Authorization: Bearer <token>
 |---|---|---|
 | `message` | string | 模型实际返回内容 |
 | `model` | string | 服务端配置的模型名 |
-| `duration_ms` | int | 本次请求实际耗时（毫秒） |
+| `duration_ms` | int | 模型调用耗时（不含记忆检索、限流和并发排队） |
 
 ## 4. 内部流程
 
