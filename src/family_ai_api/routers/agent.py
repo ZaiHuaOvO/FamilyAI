@@ -250,34 +250,39 @@ async def confirm_action(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
-    action = actions.pop(action_id, token_key)
-    if action is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="action not found or expired",
-        )
-
-    started = time.perf_counter()
+    enforce_rate_limit(request, token_key)
+    semaphore = await acquire_slot(request)
     try:
-        result = await registry.execute_tool(action.tool, normalized, settings)
-    except (registry.ToolExecutionError, registry.ToolValidationError) as exc:
-        _audit(request, action.tool, True, "error", started, action.id)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
-    except EmbeddingError as exc:
-        _audit(request, action.tool, True, "error", started, action.id)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="embedding service unavailable",
-        ) from exc
+        action = actions.pop(action_id, token_key)
+        if action is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="action not found or expired",
+            )
 
-    _audit(request, action.tool, True, "ok", started, action.id)
-    return ConfirmResponse(
-        executed=True,
-        tool=action.tool,
-        result=registry.to_jsonable(result),
-    )
+        started = time.perf_counter()
+        try:
+            result = await registry.execute_tool(action.tool, normalized, settings)
+        except (registry.ToolExecutionError, registry.ToolValidationError) as exc:
+            _audit(request, action.tool, True, "error", started, action.id)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        except EmbeddingError as exc:
+            _audit(request, action.tool, True, "error", started, action.id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="embedding service unavailable",
+            ) from exc
+
+        _audit(request, action.tool, True, "ok", started, action.id)
+        return ConfirmResponse(
+            executed=True,
+            tool=action.tool,
+            result=registry.to_jsonable(result),
+        )
+    finally:
+        semaphore.release()
 
 
 @router.post(
@@ -289,7 +294,13 @@ async def cancel_action(
     token_key: Annotated[str, Depends(require_token)],
 ) -> dict[str, bool]:
     actions, _ = _agent_state(request)
-    if actions is None or not actions.cancel(action_id, token_key):
+    if actions is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="action not found or expired",
+        )
+    enforce_rate_limit(request, token_key)
+    if not actions.cancel(action_id, token_key):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="action not found or expired",

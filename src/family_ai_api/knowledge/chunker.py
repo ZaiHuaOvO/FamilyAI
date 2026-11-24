@@ -13,9 +13,25 @@ def is_indexable(path: Path) -> bool:
     return path.suffix.lower() in TEXT_SUFFIXES
 
 
+def is_binary_file(path: Path) -> bool:
+    try:
+        sample = path.read_bytes()[:4096]
+    except OSError:
+        return True
+    if b"\x00" in sample:
+        return True
+    try:
+        sample.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
 def collect_files(root: Path) -> list[Path]:
     if root.is_file():
-        return [root] if not root.is_symlink() and is_indexable(root) else []
+        if root.is_symlink() or not is_indexable(root) or is_binary_file(root):
+            return []
+        return [root]
 
     files: list[Path] = []
     for path in sorted(root.rglob("*")):
@@ -26,7 +42,7 @@ def collect_files(root: Path) -> list[Path]:
         relative_parts = path.relative_to(root).parts[:-1]
         if any(part in SKIP_DIRS or part.startswith(".") for part in relative_parts):
             continue
-        if is_indexable(path):
+        if is_indexable(path) and not is_binary_file(path):
             files.append(path)
     return files
 

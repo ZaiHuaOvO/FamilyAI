@@ -29,7 +29,10 @@ async def require_token(
             detail="unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not secrets.compare_digest(credentials.credentials, settings.api_access_token):
+    if not secrets.compare_digest(
+        credentials.credentials.encode("utf-8"),
+        settings.api_access_token.encode("utf-8"),
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="unauthorized",

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from family_ai_api.tasks.store import TaskStore, parse_due_at
@@ -55,3 +55,19 @@ def test_parse_due_at_handles_naive_and_invalid() -> None:
         pass
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_due_filter_uses_local_date(tmp_path: Path) -> None:
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=timezone(timedelta(hours=8)))
+    store = TaskStore(tmp_path / "tasks.db")
+    try:
+        # 2026-10-17T20:00Z is 2026-10-18 04:00 in UTC+8, so it is due today locally.
+        store.add("跨时区任务", "", "2026-10-17T20:00:00+00:00")
+
+        today = store.list(due="today", now=now)
+        overdue = store.list(due="overdue", now=now)
+
+        assert [task.title for task in today] == ["跨时区任务"]
+        assert overdue == []
+    finally:
+        store.close()

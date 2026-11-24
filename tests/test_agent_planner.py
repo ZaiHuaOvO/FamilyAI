@@ -106,7 +106,9 @@ async def test_plan_overrides_hallucinated_date(
     plan = await planner.plan("明天买菜", settings(tmp_path))
 
     assert plan is not None
-    assert plan.arguments["due_at"] == (date.today() + timedelta(days=1)).isoformat()
+    assert plan.arguments["due_at"].startswith(
+        (date.today() + timedelta(days=1)).isoformat()
+    )
 
 
 @pytest.mark.asyncio

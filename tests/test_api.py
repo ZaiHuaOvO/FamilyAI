@@ -82,6 +82,56 @@ def test_chat_rejects_long_message(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_chat_rejects_invalid_json_and_wrong_type(client: TestClient) -> None:
+    invalid_json = client.post(
+        "/api/v1/chat",
+        headers={**AUTH, "Content-Type": "application/json"},
+        content=b"{invalid",
+    )
+    wrong_type = client.post(
+        "/api/v1/chat", headers=AUTH, json={"message": 123}
+    )
+
+    assert invalid_json.status_code == 422
+    assert wrong_type.status_code == 422
+
+
+def test_chat_rejects_chunked_oversized_body(client: TestClient) -> None:
+    def chunks():
+        yield b"x" * 9000
+        yield b"y" * 9000
+
+    response = client.post(
+        "/api/v1/chat",
+        content=chunks(),
+        headers={**AUTH, "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 413
+
+
+def test_chat_rejects_wrong_token_without_calling_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = False
+
+    async def fake_chat(messages, settings):
+        nonlocal called
+        called = True
+        return ollama_client.ChatResult("x", settings.ai_model)
+
+    monkeypatch.setattr(ollama_client, "chat", fake_chat)
+
+    response = client.post(
+        "/api/v1/chat",
+        headers={"Authorization": "Bearer wrong"},
+        json={"message": "你好"},
+    )
+
+    assert response.status_code == 401
+    assert called is False
+
+
 def test_chat_includes_history(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
@@ -283,6 +333,33 @@ def test_chat_stream_returns_sse(
     assert '"model": "test-model"' in text
 
 
+def test_openapi_declares_sse_content_type(client: TestClient) -> None:
+    schema = app.openapi()
+    content = schema["paths"]["/api/v1/chat/stream"]["post"]["responses"]["200"][
+        "content"
+    ]
+
+    assert "text/event-stream" in content
+    assert "application/json" not in content
+
+
+def test_stream_rate_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app.state.rate_limiter = SlidingWindowRateLimiter(1)
+
+    async def fake_stream(messages: list[dict[str, str]], settings: Settings):
+        yield "ok"
+
+    monkeypatch.setattr(ollama_client, "chat_stream", fake_stream)
+
+    first = client.post("/api/v1/chat/stream", headers=AUTH, json={"message": "你好"})
+    second = client.post("/api/v1/chat/stream", headers=AUTH, json={"message": "你好"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
 def test_chat_stream_emits_error_event(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -386,3 +463,30 @@ async def test_concurrency_limit(tmp_path, monkeypatch: pytest.MonkeyPatch) -> N
 
     assert first_response.status_code == 200
     assert second.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_stream_concurrency_error_event(tmp_path) -> None:
+    settings = Settings(
+        api_access_token="test-token",
+        ai_model="test-model",
+        auto_memory_enabled=False,
+        memory_db_path=str(tmp_path / "memory.db"),
+    )
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.state.chat_semaphore = asyncio.Semaphore(1)
+    app.state.rate_limiter = SlidingWindowRateLimiter(100)
+    await app.state.chat_semaphore.acquire()
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/chat/stream", headers=AUTH, json={"message": "你好"}
+        )
+
+    app.state.chat_semaphore.release()
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "event: error" in response.text
+    assert '"status": 429' in response.text

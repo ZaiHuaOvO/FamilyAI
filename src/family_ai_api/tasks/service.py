@@ -31,10 +31,11 @@ def normalize_due_at(due_at: str | None) -> str | None:
     if due_at is None or due_at == "":
         return None
     try:
-        parse_due_at(due_at)
+        parsed = parse_due_at(due_at)
     except ValueError as exc:
         raise TaskValidationError("due_at must be ISO 8601") from exc
-    return due_at
+    assert parsed is not None
+    return parsed.astimezone().isoformat()
 
 
 async def build_briefing(settings: Settings) -> dict:
@@ -54,9 +55,10 @@ async def build_briefing(settings: Settings) -> dict:
             continue
         if due_at is None:
             continue
-        if due_at.date() == now.date():
+        local_date = due_at.astimezone().date()
+        if local_date == now.date():
             today.append(task)
-        elif due_at.date() < now.date():
+        elif local_date < now.date():
             overdue.append(task)
 
     weather: Weather | None = await get_weather(settings)

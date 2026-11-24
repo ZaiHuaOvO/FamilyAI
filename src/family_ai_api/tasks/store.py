@@ -102,7 +102,7 @@ class TaskStore:
     ) -> list[Task]:
         rows = self._conn.execute("SELECT * FROM tasks").fetchall()
         tasks = [_row_to_task(row) for row in rows]
-        now = now or datetime.now().astimezone()
+        now = (now or datetime.now().astimezone()).astimezone()
 
         if status == "open":
             tasks = [task for task in tasks if not task.done]
@@ -117,8 +117,9 @@ class TaskStore:
                 due_at = _safe_due(task.due_at)
                 if due_at is None:
                     continue
-                if (due == "today" and due_at.date() == now.date()) or (
-                    due == "overdue" and due_at.date() < now.date()
+                local_date = due_at.astimezone().date()
+                if (due == "today" and local_date == now.date()) or (
+                    due == "overdue" and local_date < now.date()
                 ):
                     filtered.append(task)
             tasks = filtered

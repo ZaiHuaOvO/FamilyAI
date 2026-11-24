@@ -78,22 +78,19 @@ def build_messages(payload: ChatRequest, settings: Settings) -> list[dict[str, s
     return messages
 
 
-async def prepare_messages(
-    payload: ChatRequest,
+async def add_memory_context(
+    messages: list[dict[str, str]],
+    message: str,
     settings: Settings,
 ) -> list[dict[str, str]]:
-    messages = build_messages(payload, settings)
-    if not payload.use_memory:
-        return messages
-
     try:
-        context = await memory_service.build_context(payload.message.strip(), settings)
+        context = await memory_service.build_context(message, settings)
     except (EmbeddingError, ValueError):
         logger.warning("memory retrieval skipped")
         return messages
 
     if context:
-        messages.insert(0, {"role": "system", "content": context})
+        return [{"role": "system", "content": context}, *messages]
     return messages
 
 
@@ -105,17 +102,21 @@ async def chat(
     token_key: Annotated[str, Depends(require_token)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ChatResponse:
-    messages = await prepare_messages(payload, settings)
+    messages = build_messages(payload, settings)
     enforce_rate_limit(request, token_key)
     semaphore = await acquire_slot(request)
-    background.add_task(
-        run_auto_extraction,
-        payload.message.strip(),
-        settings,
-        getattr(request.app.state, "memory_extraction_semaphore", None),
-    )
 
     try:
+        if payload.use_memory:
+            messages = await add_memory_context(
+                messages, payload.message.strip(), settings
+            )
+        background.add_task(
+            run_auto_extraction,
+            payload.message.strip(),
+            settings,
+            getattr(request.app.state, "memory_extraction_semaphore", None),
+        )
         started = time.perf_counter()
         result = await ollama_client.chat(messages, settings)
         duration_ms = int((time.perf_counter() - started) * 1000)
@@ -131,7 +132,17 @@ def sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-@router.post("/chat/stream")
+@router.post(
+    "/chat/stream",
+    responses={
+        200: {
+            "description": "SSE stream",
+            "content": {
+                "text/event-stream": {"schema": {"type": "string"}}
+            },
+        }
+    },
+)
 async def chat_stream(
     payload: ChatRequest,
     request: Request,
@@ -139,14 +150,8 @@ async def chat_stream(
     token_key: Annotated[str, Depends(require_token)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> StreamingResponse:
-    messages = await prepare_messages(payload, settings)
+    messages = build_messages(payload, settings)
     enforce_rate_limit(request, token_key)
-    background.add_task(
-        run_auto_extraction,
-        payload.message.strip(),
-        settings,
-        getattr(request.app.state, "memory_extraction_semaphore", None),
-    )
     semaphore: asyncio.Semaphore = request.app.state.chat_semaphore
 
     async def event_generator():
@@ -159,16 +164,28 @@ async def chat_stream(
             )
             return
 
-        started = time.perf_counter()
         try:
-            async for delta in ollama_client.chat_stream(messages, settings):
+            stream_messages = messages
+            if payload.use_memory:
+                stream_messages = await add_memory_context(
+                    messages, payload.message.strip(), settings
+                )
+            background.add_task(
+                run_auto_extraction,
+                payload.message.strip(),
+                settings,
+                getattr(request.app.state, "memory_extraction_semaphore", None),
+            )
+
+            started = time.perf_counter()
+            async for delta in ollama_client.chat_stream(stream_messages, settings):
                 yield sse_event("delta", {"delta": delta})
             duration_ms = int((time.perf_counter() - started) * 1000)
             yield sse_event("done", {"model": settings.ai_model, "duration_ms": duration_ms})
         except ollama_client.OllamaError as exc:
             yield sse_event("error", {"detail": exc.detail, "status": exc.status_code})
-        except Exception:
-            logger.warning("chat stream failed", exc_info=True)
+        except Exception as exc:  # noqa: BLE001 - stream must emit an SSE error
+            logger.warning("chat stream failed: %s", type(exc).__name__)
             yield sse_event("error", {"detail": "model request failed", "status": 502})
         finally:
             semaphore.release()

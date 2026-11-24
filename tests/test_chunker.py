@@ -71,6 +71,17 @@ def test_collect_files_skips_symlinks(tmp_path: Path) -> None:
     assert files == [target]
 
 
+def test_collect_files_skips_binary_content(tmp_path: Path) -> None:
+    text = tmp_path / "text.md"
+    text.write_text("# Text", encoding="utf-8")
+    binary = tmp_path / "binary.md"
+    binary.write_bytes(b"\x00\x01\x02\x03")
+
+    files = collect_files(tmp_path)
+
+    assert files == [text]
+
+
 def test_document_title_uses_heading(tmp_path: Path) -> None:
     path = tmp_path / "doc.md"
 

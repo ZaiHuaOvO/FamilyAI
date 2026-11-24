@@ -59,6 +59,7 @@ def test_memory_crud(memory_client) -> None:
         json={"content": "周末优先户外", "tags": ["家庭"]},
     )
     assert created.status_code == 201
+    assert created.headers["cache-control"] == "no-store"
     body = created.json()
     memory_id = body["id"]
     assert body["content"] == "周末优先户外"
@@ -67,6 +68,7 @@ def test_memory_crud(memory_client) -> None:
 
     listed = client.get("/api/v1/memory", headers=AUTH)
     assert listed.status_code == 200
+    assert listed.headers["cache-control"] == "no-store"
     assert listed.json()["entries"][0]["content"] == "周末优先户外"
 
     searched = client.get("/api/v1/memory?query=户外", headers=AUTH)
@@ -80,11 +82,13 @@ def test_memory_crud(memory_client) -> None:
         json={"content": "周末优先户外活动", "tags": ["家庭", "周末"]},
     )
     assert updated.status_code == 200
+    assert updated.headers["cache-control"] == "no-store"
     assert updated.json()["content"] == "周末优先户外活动"
     assert updated.json()["tags"] == ["家庭", "周末"]
 
     deleted = client.delete(f"/api/v1/memory/{memory_id}", headers=AUTH)
     assert deleted.status_code == 200
+    assert deleted.headers["cache-control"] == "no-store"
     assert deleted.json() == {"deleted": True}
     assert client.get("/api/v1/memory", headers=AUTH).json()["entries"] == []
 

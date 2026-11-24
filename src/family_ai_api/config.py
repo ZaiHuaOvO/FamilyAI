@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +48,13 @@ class Settings(BaseSettings):
     agent_max_tool_result_chars: int = 6000
     agent_action_ttl_seconds: int = 300
     agent_audit_size: int = 200
+
+    @field_validator("weather_latitude", "weather_longitude", mode="before")
+    @classmethod
+    def _blank_weather_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 @lru_cache
