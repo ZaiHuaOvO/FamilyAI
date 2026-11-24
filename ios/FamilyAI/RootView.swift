@@ -28,6 +28,8 @@ struct RootView: View {
                     } label: {
                         Image(systemName: "gearshape")
                     }
+                    .accessibilityIdentifier("settingsButton")
+                    .accessibilityLabel("设置")
                 }
             }
         }
@@ -54,6 +56,7 @@ private struct SetupView: View {
                 showSettings = true
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("openSettingsButton")
         }
         .padding(28)
     }

@@ -1,6 +1,6 @@
 # V7：Apple iOS 客户端（首版）
 
-> 状态：**代码完成，Xcode 编译与 Simulator 启动通过；待聊天功能手动验证（2026-11-24）**  
+> 状态：**已完成（Simulator 自动化验收通过；真机待验证）— 2026-11-24**  
 > 前置：V6（`v6.0.0`）已完成  
 > 决策依据：[V7 Apple 客户端方案决策](../06-决策记录/V7-Apple客户端方案.md)
 
@@ -33,7 +33,10 @@ ios/
 │   ├── KeychainStore.swift      # Token 安全存储
 │   ├── Models.swift
 │   ├── Info.plist
+│   ├── FamilyAI.entitlements   # Keychain 访问组
 │   └── Assets.xcassets/
+├── FamilyAITests/               # Keychain 单元测试
+├── FamilyAIUITests/             # 端到端 UI 测试
 └── README.md
 ```
 
@@ -52,6 +55,9 @@ ios/
 - 只访问家庭局域网；不接公网。
 - `Info.plist`：`NSAllowsLocalNetworking` + 本地网络用途说明。
 - Token 只保存在 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）。
+- `FamilyAI.entitlements` 声明 `keychain-access-groups`；Simulator 构建会写入
+  `FAKETEAMID.com.familyai.app`。不要再用 `CODE_SIGNING_ALLOWED=NO` 构建安装包，
+  否则 Token 无法写入 Keychain。
 - 不在日志、源码或 UserDefaults 中保存 Token。
 - Token 轮换/撤销后收到 401，需要重新配置。
 - 默认地址 `http://192.168.5.18:8000` 只是占位；DHCP 变化后需修改。
@@ -66,46 +72,57 @@ xcodegen generate   # 修改 project.yml 后
 open FamilyAI.xcodeproj
 ```
 
-命令行构建（安装 Xcode 后）：
+命令行构建与测试：
 
 ```bash
+cd ios
+xcodegen generate
 xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' build
+  -destination 'platform=iOS Simulator,name=iPhone 17' build
+
+xcodebuild test -project FamilyAI.xcodeproj -scheme FamilyAI \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -derivedDataPath /tmp/FamilyAI-DerivedData \
+  -only-testing:FamilyAITests
+```
+
+端到端 UI 测试（需要本机临时凭据端点，见验收记录）：
+
+```bash
+xcodebuild test -project FamilyAI.xcodeproj -scheme FamilyAI \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -derivedDataPath /tmp/FamilyAI-DerivedData \
+  -only-testing:FamilyAIUITests/FamilyAIUITests/testConnectChatAndPersist
 ```
 
 真机需要配置开发者团队与签名。
 
 ## 6. 已验证 / 待验证
 
-已验证：
+已验证（2026-11-24，iPhone 17 Simulator / iOS 27.2）：
 
-- Xcode 27.2（iOS 27.2 SDK）编译通过：`** BUILD SUCCEEDED **`。
-- iPhone 17（iOS 27.2）Simulator 安装并启动成功，显示“连接家庭 AI”设置引导页。
-- XcodeGen 成功生成 `FamilyAI.xcodeproj` 与共享 Scheme。
-- `swiftc -parse FamilyAI/*.swift` 通过（语法检查）。
-- 后端依赖的 API（chat/stream/me/health）已由 V1.1–V6 验收。
-- 139 项后端测试与 ruff 仍通过。
+- Xcode 27.2 编译通过：`** BUILD SUCCEEDED **`。
+- Keychain 单元测试通过：保存、读取、删除。
+- UI 测试通过（81.3s）：临时成员登录 → 测试连接 → 流式聊天 → 非流式聊天
+  → 无效 Token 显示 401 → 恢复 Token → 结束进程重启后自动连接。
+- 139 项后端测试与 ruff 仍通过（后端未改动）。
+- 测试用临时成员已全部撤销；Token 未写入源码、日志或提交。
 
-待验证（需要手动输入 Token 并聊天）：
+待验证：
 
-- [x] Xcode 编译（严格并发 `complete`）。
-- [x] iOS Simulator 启动。
-- [ ] 设置 Token → 测试连接 → 非流式聊天。
-- [ ] 流式聊天增量显示与 done 耗时。
-- [ ] 401/429/服务端错误提示。
-- [ ] 真机局域网权限与 ATS 行为。
+- [ ] 真机签名、局域网权限与 ATS 行为。
+- [ ] 429 限流提示（后端已有覆盖）。
 
 ## 7. 已知限制
 
 - 首版不含记忆、任务、知识库、Widget、通知、账户登录。
-- 聊天功能尚未在 Simulator 中完成 Token 输入与真实问答验证。
+- 真机未验证；Simulator 与真机的本地网络权限提示不同。
+- 默认 IP 为占位值，需按当前 Mac 局域网地址修改；没有自动发现。
 - 流式取消会取消本地 Task；服务端负责释放并发槽位。
-- 默认 IP 为占位值，需按当前 Mac 局域网地址修改。
-- 没有自动发现服务器；地址需手动配置。
-- 真机签名、局域网权限与 ATS 尚未验证。
+- UI 自动化测试依赖本机 `127.0.0.1` 临时凭据端点（`ios/scripts/ui-test-credentials.py`），缺少时自动跳过。
 
 ## 8. 下一步
 
-1. 安装 Xcode，打开 `ios/FamilyAI.xcodeproj`。
-2. 配置签名与开发者团队，运行 Simulator/真机。
-3. 完成第 6 节的待验证项后，再决定是否增加记忆/任务页面、Widget 或通知。
+1. 用户在 Simulator 中填入自己的成员 Token（旧的无签名安装未保存成功）。
+2. 如需真机，配置签名与开发者团队后重复连接/聊天验证。
+3. 再决定是否增加记忆/任务页面、Widget 或通知。

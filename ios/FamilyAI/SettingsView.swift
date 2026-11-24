@@ -17,12 +17,15 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
+                    .accessibilityIdentifier("baseURLField")
 
                     SecureField("API Token", text: $settings.token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .accessibilityIdentifier("tokenField")
 
                     Toggle("流式输出", isOn: $settings.streamingEnabled)
+                        .accessibilityIdentifier("streamingToggle")
                 } header: {
                     Text("服务器")
                 } footer: {
@@ -44,11 +47,13 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(testing || !settings.isConfigured)
+                    .accessibilityIdentifier("testConnectionButton")
 
                     if let status {
                         Text(status)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("settingsStatusText")
                     }
                 } footer: {
                     Text("局域网 IP 可能因 DHCP 变化；连接失败时先确认 Mac 当前 IP 与服务是否运行。")
@@ -60,6 +65,7 @@ struct SettingsView: View {
                     Button("完成") {
                         dismiss()
                     }
+                    .accessibilityIdentifier("doneButton")
                 }
             }
         }

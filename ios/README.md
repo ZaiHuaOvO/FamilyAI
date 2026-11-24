@@ -41,7 +41,7 @@ uv run python -m family_ai_api.members.cli create --name iphone --role member
 3. 在 App 设置中填写服务器地址与 Token，点击“测试连接”。
 4. 返回聊天页开始对话。
 
-> Token 只保存在 iOS Keychain；服务器地址与流式开关保存在 UserDefaults。Token 轮换或撤销后，App 会收到 401，需要在设置中更新 Token。
+> Token 只保存在 iOS Keychain；服务器地址与流式开关保存在 UserDefaults。Token 轮换或撤销后，App 会收到 401，需要在设置中更新 Token。Keychain 访问依赖 `FamilyAI.entitlements` 的 `keychain-access-groups`；用 `CODE_SIGNING_ALLOWED=NO` 构建的安装包无法保存 Token。
 
 ## 网络与安全
 
@@ -56,10 +56,31 @@ uv run python -m family_ai_api.members.cli create --name iphone --role member
 ```bash
 cd ios
 xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' build
+  -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 真机运行需要在 Xcode 中配置开发者团队与签名。
+
+## 测试
+
+```bash
+cd ios
+xcodebuild test -project FamilyAI.xcodeproj -scheme FamilyAI \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -derivedDataPath /tmp/FamilyAI-DerivedData \
+  -only-testing:FamilyAITests
+```
+
+- `FamilyAITests`：Keychain 保存/读取/删除。
+- `FamilyAIUITests`：连接、流式/非流式聊天、401 提示、重启后 Token 保持。
+  UI 测试无法从运行环境取得 Token，需要先启动本机回环助手：
+
+```bash
+FAMILYAI_UI_TOKEN=<临时成员 Token> python3 scripts/ui-test-credentials.py
+```
+
+  助手只监听 `127.0.0.1:8765`，仅用于本地测试；测试结束后停止助手并撤销临时成员。
+  没有助手时 UI 测试自动跳过。
 
 ## 代码结构
 
@@ -74,9 +95,12 @@ xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
 | `Models.swift` | 请求/响应模型 |
 | `KeychainStore.swift` | Token 安全存储 |
 | `AppSettings.swift` | 配置持久化 |
+| `FamilyAI.entitlements` | Keychain 访问组 |
+| `FamilyAITests/` | Keychain 单元测试 |
+| `FamilyAIUITests/` | 端到端 UI 测试 |
 
 ## 已知限制
 
 - 首版不包含 Widget、通知、记忆/任务/知识库界面。
 - 流式取消依赖 Task 取消；服务端会释放并发槽位。
-- 需要完整 Xcode 才能编译；当前开发机仅有 Command Line Tools。
+- 真机签名、局域网权限与 ATS 尚未验证。

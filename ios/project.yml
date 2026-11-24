@@ -8,6 +8,12 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: ""
+  configs:
+    Debug:
+      ENABLE_TESTABILITY: YES
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    Release:
+      ENABLE_TESTABILITY: NO
 targets:
   FamilyAI:
     type: application
@@ -16,6 +22,7 @@ targets:
       - path: FamilyAI
         excludes:
           - Info.plist
+          - FamilyAI.entitlements
     settings:
       base:
         PRODUCT_NAME: FamilyAI
@@ -26,15 +33,49 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: FamilyAI/FamilyAI.entitlements
         ENABLE_PREVIEWS: YES
         SWIFT_STRICT_CONCURRENCY: complete
         ALWAYS_SEARCH_USER_PATHS: NO
+  FamilyAITests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FamilyAITests
+    dependencies:
+      - target: FamilyAI
+    settings:
+      base:
+        PRODUCT_NAME: FamilyAITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.familyai.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  FamilyAIUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: FamilyAIUITests
+    dependencies:
+      - target: FamilyAI
+    settings:
+      base:
+        PRODUCT_NAME: FamilyAIUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.familyai.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: FamilyAI
 schemes:
   FamilyAI:
     build:
       targets:
         FamilyAI: all
+        FamilyAITests: [test]
+        FamilyAIUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - FamilyAITests
+        - FamilyAIUITests
     archive:
       config: Release

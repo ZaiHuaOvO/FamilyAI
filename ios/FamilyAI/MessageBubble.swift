@@ -27,6 +27,9 @@ struct MessageBubble: View {
                     .foregroundStyle(isUser ? Color.white : Color.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .textSelection(.enabled)
+                    .accessibilityIdentifier(
+                        isUser ? "userMessageText" : "assistantMessageText"
+                    )
 
                 if let duration = message.durationMs, !isUser {
                     Text("\(duration) ms")

@@ -22,6 +22,34 @@
                ReferencedContainer = "container:FamilyAI.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D8BD86CBC4FDD50D423140E5"
+               BuildableName = "FamilyAITests.xctest"
+               BlueprintName = "FamilyAITests"
+               ReferencedContainer = "container:FamilyAI.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E27CA1097437AEAEE51942F8"
+               BuildableName = "FamilyAIUITests.xctest"
+               BlueprintName = "FamilyAIUITests"
+               ReferencedContainer = "container:FamilyAI.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -40,7 +68,31 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D8BD86CBC4FDD50D423140E5"
+               BuildableName = "FamilyAITests.xctest"
+               BlueprintName = "FamilyAITests"
+               ReferencedContainer = "container:FamilyAI.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E27CA1097437AEAEE51942F8"
+               BuildableName = "FamilyAIUITests.xctest"
+               BlueprintName = "FamilyAIUITests"
+               ReferencedContainer = "container:FamilyAI.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

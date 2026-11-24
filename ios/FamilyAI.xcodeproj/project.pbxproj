@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02B661DC50D02C4F4130EE8F /* FamilyAIUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7ADC61DF5D009004F526162 /* FamilyAIUITests.swift */; };
 		22467DFADCF05E092B403133 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BD66B4C2A7AFC2E9C30E1960 /* Assets.xcassets */; };
+		3CF8F736B83578BA9F80EBD3 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4483F1E0919A584F31870F28 /* KeychainStoreTests.swift */; };
 		4EB773519396C4A40E5CC1D3 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449AD4A93241E5889632D518 /* RootView.swift */; };
 		64684EEF961FA386B08D1203 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5102411B9D6A892A3319573E /* MessageBubble.swift */; };
 		6AC77F12FBF6BE5B9BD9487A /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C159FCD14BFB154C80E323C /* ChatViewModel.swift */; };
@@ -20,10 +22,29 @@
 		DE97551E9773602D5DA58070 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B4C6A60364FFFD7504CE47 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		966A7D539B0FB11214AA2ACF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BEC11BB24F7EF119E190A45D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F7F8924B3232AA9FF4C1BE1C;
+			remoteInfo = FamilyAI;
+		};
+		E032C7096F4BFB8FDF6CC81E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BEC11BB24F7EF119E190A45D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F7F8924B3232AA9FF4C1BE1C;
+			remoteInfo = FamilyAI;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		17B4C6A60364FFFD7504CE47 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2878C8B19BA8E32DFB0BD9D5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		2C159FCD14BFB154C80E323C /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		40EAE8F8CF0EBE06F723231C /* FamilyAITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FamilyAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4483F1E0919A584F31870F28 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		449AD4A93241E5889632D518 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4B5773C4486D78C639700AEB /* FamilyAI.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FamilyAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EC1C9C63C5B0E2ED5DB073F /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -31,6 +52,8 @@
 		6090A687FFF239E0F32AABF1 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		BD66B4C2A7AFC2E9C30E1960 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C05370B24FD103D26466A7BA /* FamilyAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyAIApp.swift; sourceTree = "<group>"; };
+		C7ADC61DF5D009004F526162 /* FamilyAIUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyAIUITests.swift; sourceTree = "<group>"; };
+		D9843F8B47456B174E918941 /* FamilyAIUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FamilyAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F62EB09D29429B2153960294 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F99EB90AB3F487170853FAC2 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -40,6 +63,8 @@
 			isa = PBXGroup;
 			children = (
 				4E1198B2026A523646F414A7 /* FamilyAI */,
+				90526C31FF6FD46990318C43 /* FamilyAITests */,
+				B9DA3C79A25567BFBCF51035 /* FamilyAIUITests */,
 				5F8FD0978CFDF7A1C6600D3F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,13 +91,67 @@
 			isa = PBXGroup;
 			children = (
 				4B5773C4486D78C639700AEB /* FamilyAI.app */,
+				40EAE8F8CF0EBE06F723231C /* FamilyAITests.xctest */,
+				D9843F8B47456B174E918941 /* FamilyAIUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		90526C31FF6FD46990318C43 /* FamilyAITests */ = {
+			isa = PBXGroup;
+			children = (
+				4483F1E0919A584F31870F28 /* KeychainStoreTests.swift */,
+			);
+			path = FamilyAITests;
+			sourceTree = "<group>";
+		};
+		B9DA3C79A25567BFBCF51035 /* FamilyAIUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C7ADC61DF5D009004F526162 /* FamilyAIUITests.swift */,
+			);
+			path = FamilyAIUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D8BD86CBC4FDD50D423140E5 /* FamilyAITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 30AF43688174052323283987 /* Build configuration list for PBXNativeTarget "FamilyAITests" */;
+			buildPhases = (
+				6E1646ECAAF33027C2409A49 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				10FAE4D047DA02FCACA384C7 /* PBXTargetDependency */,
+			);
+			name = FamilyAITests;
+			packageProductDependencies = (
+			);
+			productName = FamilyAITests;
+			productReference = 40EAE8F8CF0EBE06F723231C /* FamilyAITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		E27CA1097437AEAEE51942F8 /* FamilyAIUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A9136DA1E99EE2A6B975A2DF /* Build configuration list for PBXNativeTarget "FamilyAIUITests" */;
+			buildPhases = (
+				CCBFEE3B84676F7F1784F8A8 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB1872DDF9EC7F63D506C6B1 /* PBXTargetDependency */,
+			);
+			name = FamilyAIUITests;
+			packageProductDependencies = (
+			);
+			productName = FamilyAIUITests;
+			productReference = D9843F8B47456B174E918941 /* FamilyAIUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		F7F8924B3232AA9FF4C1BE1C /* FamilyAI */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A74A995436AAED3CE30B7BA1 /* Build configuration list for PBXNativeTarget "FamilyAI" */;
@@ -100,6 +179,13 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					D8BD86CBC4FDD50D423140E5 = {
+						DevelopmentTeam = "";
+					};
+					E27CA1097437AEAEE51942F8 = {
+						DevelopmentTeam = "";
+						TestTargetID = F7F8924B3232AA9FF4C1BE1C;
+					};
 					F7F8924B3232AA9FF4C1BE1C = {
 						DevelopmentTeam = "";
 					};
@@ -120,6 +206,8 @@
 			projectRoot = "";
 			targets = (
 				F7F8924B3232AA9FF4C1BE1C /* FamilyAI */,
+				D8BD86CBC4FDD50D423140E5 /* FamilyAITests */,
+				E27CA1097437AEAEE51942F8 /* FamilyAIUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -153,14 +241,54 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6E1646ECAAF33027C2409A49 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3CF8F736B83578BA9F80EBD3 /* KeychainStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CCBFEE3B84676F7F1784F8A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02B661DC50D02C4F4130EE8F /* FamilyAIUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		10FAE4D047DA02FCACA384C7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F7F8924B3232AA9FF4C1BE1C /* FamilyAI */;
+			targetProxy = E032C7096F4BFB8FDF6CC81E /* PBXContainerItemProxy */;
+		};
+		BB1872DDF9EC7F63D506C6B1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F7F8924B3232AA9FF4C1BE1C /* FamilyAI */;
+			targetProxy = 966A7D539B0FB11214AA2ACF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		04C6BE0BF4791C3657F513FD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyai.app.uitests;
+				PRODUCT_NAME = FamilyAIUITests;
+				TEST_TARGET_NAME = FamilyAI;
+			};
+			name = Debug;
+		};
 		4E232E40FDDA730F366F4A44 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FamilyAI/FamilyAI.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -177,9 +305,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				DEVELOPMENT_TEAM = "";
+				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		860F9F99CAC1A1EE9112ABDE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyai.app.tests;
+				PRODUCT_NAME = FamilyAITests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyAI.app/FamilyAI";
 			};
 			name = Debug;
 		};
@@ -188,6 +329,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FamilyAI/FamilyAI.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -200,19 +342,50 @@
 			};
 			name = Debug;
 		};
+		A1846ACA7BB91074700FEBBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyai.app.tests;
+				PRODUCT_NAME = FamilyAITests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyAI.app/FamilyAI";
+			};
+			name = Release;
+		};
 		A93544D3433CB5DDDA1083AE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				DEVELOPMENT_TEAM = "";
+				ENABLE_TESTABILITY = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
+		DBA91CEC8A8402A3148225CB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyai.app.uitests;
+				PRODUCT_NAME = FamilyAIUITests;
+				TEST_TARGET_NAME = FamilyAI;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		30AF43688174052323283987 /* Build configuration list for PBXNativeTarget "FamilyAITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				860F9F99CAC1A1EE9112ABDE /* Debug */,
+				A1846ACA7BB91074700FEBBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A407B8AC80897DC87DA7A0B0 /* Build configuration list for PBXProject "FamilyAI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -227,6 +400,15 @@
 			buildConfigurations = (
 				8A893A164877B25ACDAED027 /* Debug */,
 				4E232E40FDDA730F366F4A44 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A9136DA1E99EE2A6B975A2DF /* Build configuration list for PBXNativeTarget "FamilyAIUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				04C6BE0BF4791C3657F513FD /* Debug */,
+				DBA91CEC8A8402A3148225CB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -13,6 +13,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                     .padding(.top, 6)
+                    .accessibilityIdentifier("connectionStatusText")
             }
 
             ScrollViewReader { proxy in
@@ -60,6 +61,7 @@ struct ChatView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .disabled(model.isSending)
+                    .accessibilityIdentifier("chatInput")
 
                 if model.isSending {
                     Button {
@@ -68,6 +70,8 @@ struct ChatView: View {
                         Image(systemName: "stop.circle.fill")
                             .font(.title2)
                     }
+                    .accessibilityIdentifier("stopButton")
+                    .accessibilityLabel("停止")
                 } else {
                     Button {
                         model.send()
@@ -76,6 +80,8 @@ struct ChatView: View {
                             .font(.title2)
                     }
                     .disabled(!model.canSend)
+                    .accessibilityIdentifier("sendButton")
+                    .accessibilityLabel("发送")
                 }
             }
             .padding(10)
@@ -86,6 +92,7 @@ struct ChatView: View {
                     model.clear()
                 }
                 .disabled(model.messages.isEmpty || model.isSending)
+                .accessibilityIdentifier("clearButton")
             }
         }
         .task {
