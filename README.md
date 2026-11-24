@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V6 已完成（`v6.0.0`）**——本地模型、流式聊天、知识库/RAG、长期记忆、家庭任务、工具调用与家庭成员权限均已验证。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V6 已完成（`v6.0.0`）**；**V7 iOS 客户端代码已就绪，待 Xcode 构建验证**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -117,6 +117,18 @@ uv run python -m family_ai_api.members.cli rotate --name alice
 uv run python -m family_ai_api.members.cli revoke --name alice
 ```
 
+## iOS 客户端
+
+`ios/` 包含 SwiftUI iOS/iPadOS 聊天客户端（V7 首版），支持 Keychain Token、非流式/流式聊天与历史。完整构建需要 Xcode：
+
+```bash
+cd ios
+xcodegen generate
+open FamilyAI.xcodeproj
+```
+
+详见 [ios/README.md](ios/README.md)。
+
 可选天气：在 `.env` 中设置 `WEATHER_LATITUDE`、`WEATHER_LONGITUDE` 与 `WEATHER_LOCATION_NAME`，简报会使用 Open-Meteo 获取天气；留空即禁用。
 
 工具调用：只读工具自动执行；`create_task`、`complete_task`、`add_memory` 会先返回 `pending_action`，需调用 `/api/v1/agent/actions/{action_id}/confirm` 才会执行。写工具可用 `AGENT_WRITE_TOOLS_ENABLED=false` 关闭。
@@ -138,6 +150,8 @@ uv run ruff check .
 - [V4 家庭任务与提醒](docs/02-实施阶段/V4-家庭任务与提醒.md)
 - [V5 工具调用](docs/02-实施阶段/V5-工具调用.md)
 - [V6 家庭成员权限](docs/02-实施阶段/V6-家庭成员权限.md)
+- [V7 Apple 客户端（代码完成）](docs/02-实施阶段/V7-Apple客户端.md)
+- [iOS 客户端说明](ios/README.md)
 - [API 接口规范](docs/03-设计与规范/API接口规范.md)
 - [原始开发指南（归档）](docs/00-归档/原始开发文档-V1.1.md)
 
