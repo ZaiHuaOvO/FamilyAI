@@ -1,5 +1,7 @@
 # V7验收记录：Apple iOS 客户端（代码完成）
 
+> 状态：**代码完成，Xcode 编译与 Simulator 启动通过；待聊天功能手动验证（2026-11-24）**
+
 ## 基本信息
 
 | 项目 | 内容 |
@@ -44,10 +46,28 @@ xcodegen generate
 
 结果：成功生成 `FamilyAI.xcodeproj` 与共享 Scheme `FamilyAI`。
 
-## 待用户验证（需要完整 Xcode）
+Xcode 编译：
 
-- [ ] Xcode 编译通过（Swift 6 严格并发）。
-- [ ] Simulator 启动。
+```bash
+xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath /tmp/FamilyAI-DerivedData \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+结果：`** BUILD SUCCEEDED **`（Xcode 27.2，iOS 27.2 Simulator SDK，Swift 6 严格并发）。
+
+Simulator：
+
+- 启动 iPhone 17（iOS 27.2）。
+- 安装 `FamilyAI.app` 并启动（bundle id `com.familyai.app`）。
+- 截图确认显示“连接家庭 AI”设置引导页。
+
+## 待用户验证（需要手动输入 Token）
+
+- [x] Xcode 编译通过（Swift 6 严格并发）。
+- [x] Simulator 启动并显示引导页。
 - [ ] 设置 Token 后测试连接成功。
 - [ ] 非流式聊天返回真实回答。
 - [ ] 流式聊天增量显示并显示 done 耗时。
@@ -55,15 +75,9 @@ xcodegen generate
 - [ ] 局域网权限提示与 ATS 行为正常。
 - [ ] 真机运行（签名）。
 
-## 为什么未完成构建验证
+## 为什么尚未完成聊天验证
 
-本机只有 Command Line Tools：
-
-```text
-xcode-select: error: tool 'xcodebuild' requires Xcode
-```
-
-没有 `/Applications/Xcode.app`、`simctl` 或 iOS SDK，因此无法编译/启动 Simulator。已用 Swift 解析器检查语法，但类型检查与运行必须由 Xcode 完成。
+聊天需要手动在 Simulator 中输入 Token 并发送消息；本轮已完成编译、安装与启动，但未自动输入凭据。下一步由用户或后续 UI 测试完成。
 
 ## 安全确认
 
@@ -76,7 +90,8 @@ xcode-select: error: tool 'xcodebuild' requires Xcode
 
 - 首版仅聊天核心；无记忆/任务/知识库/Widget/通知。
 - 默认服务器地址为占位 IP，需手动修改。
-- 代码尚未经过 Xcode 编译与运行验证。
+- 聊天功能尚未完成 Token 输入与真实问答验证。
+- 真机签名、局域网权限与 ATS 尚未验证。
 
 ## 下一步
 

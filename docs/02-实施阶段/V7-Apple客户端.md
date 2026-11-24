@@ -1,6 +1,6 @@
 # V7：Apple iOS 客户端（首版）
 
-> 状态：**代码完成，待 Xcode 构建与真机/模拟器测试（2026-11-24）**  
+> 状态：**代码完成，Xcode 编译与 Simulator 启动通过；待聊天功能手动验证（2026-11-24）**  
 > 前置：V6（`v6.0.0`）已完成  
 > 决策依据：[V7 Apple 客户端方案决策](../06-决策记录/V7-Apple客户端方案.md)
 
@@ -79,15 +79,17 @@ xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
 
 已验证：
 
+- Xcode 27.2（iOS 27.2 SDK）编译通过：`** BUILD SUCCEEDED **`。
+- iPhone 17（iOS 27.2）Simulator 安装并启动成功，显示“连接家庭 AI”设置引导页。
 - XcodeGen 成功生成 `FamilyAI.xcodeproj` 与共享 Scheme。
 - `swiftc -parse FamilyAI/*.swift` 通过（语法检查）。
 - 后端依赖的 API（chat/stream/me/health）已由 V1.1–V6 验收。
 - 139 项后端测试与 ruff 仍通过。
 
-待验证（需要 Xcode）：
+待验证（需要手动输入 Token 并聊天）：
 
-- [ ] Xcode 编译（严格并发 `complete`）。
-- [ ] iOS Simulator 启动。
+- [x] Xcode 编译（严格并发 `complete`）。
+- [x] iOS Simulator 启动。
 - [ ] 设置 Token → 测试连接 → 非流式聊天。
 - [ ] 流式聊天增量显示与 done 耗时。
 - [ ] 401/429/服务端错误提示。
@@ -95,11 +97,12 @@ xcodebuild -project FamilyAI.xcodeproj -scheme FamilyAI \
 
 ## 7. 已知限制
 
-- 当前开发机没有完整 Xcode，无法本轮编译/运行；代码只做了语法解析。
 - 首版不含记忆、任务、知识库、Widget、通知、账户登录。
+- 聊天功能尚未在 Simulator 中完成 Token 输入与真实问答验证。
 - 流式取消会取消本地 Task；服务端负责释放并发槽位。
 - 默认 IP 为占位值，需按当前 Mac 局域网地址修改。
 - 没有自动发现服务器；地址需手动配置。
+- 真机签名、局域网权限与 ATS 尚未验证。
 
 ## 8. 下一步
 
