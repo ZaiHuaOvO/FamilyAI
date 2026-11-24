@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V7 已完成（`v7.0.0`）**；**V8 外部访问进行中（Tailscale Serve 已启用并完成回环绑定迁移，ACL 待配置）**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V7 已完成（`v7.0.0`）**；**V8 外部访问进行中（Tailscale Serve、回环绑定与 ACL 已完成；key expiry 与真机验收待完成）**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
