@@ -11,7 +11,8 @@ from fastapi.openapi.utils import get_openapi
 from family_ai_api.agent.actions import ActionStore
 from family_ai_api.agent.audit import AuditStore
 from family_ai_api.config import get_settings
-from family_ai_api.routers import agent, chat, health, logs, memory, models, rag, tasks
+from family_ai_api.members.store import MemberStore
+from family_ai_api.routers import agent, chat, health, logs, me, memory, models, rag, tasks
 from family_ai_api.services.limits import SlidingWindowRateLimiter
 from family_ai_api.services.request_log import RequestLogEntry, RequestLogStore
 
@@ -87,6 +88,11 @@ class BodySizeLimitMiddleware:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    member_store = MemberStore(settings.members_db_path)
+    try:
+        member_store.ensure_bootstrap(settings.api_access_token)
+    finally:
+        member_store.close()
     app.state.chat_semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
     app.state.rate_limiter = SlidingWindowRateLimiter(settings.rate_limit_per_minute)
     app.state.request_log = RequestLogStore(settings.request_log_size)
@@ -101,7 +107,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Family AI API",
         description="家庭局域网内使用的本地大模型 API",
-        version="5.0.0",
+        version="6.0.0",
         lifespan=lifespan,
     )
 
@@ -136,6 +142,7 @@ def create_app() -> FastAPI:
                     status=response.status_code,
                     duration_ms=round(duration_ms, 1),
                     client=request.client.host if request.client else "unknown",
+                    member_id=getattr(request.state, "member_id", None),
                 )
             )
         return response
@@ -148,6 +155,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
     app.include_router(agent.router, prefix="/api/v1")
+    app.include_router(me.router, prefix="/api/v1")
 
     def custom_openapi():
         if app.openapi_schema:

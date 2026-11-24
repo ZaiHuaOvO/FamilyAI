@@ -32,19 +32,35 @@ def normalize_tags(tags: list[str]) -> list[str]:
     return list(dict.fromkeys(cleaned))
 
 
+def _owner(member_id: int) -> str | None:
+    return str(member_id) if member_id > 0 else None
+
+
 async def add_memory(
     content: str,
     tags: list[str],
     settings: Settings,
     source: str = "explicit",
+    member_id: int = 0,
+    shared: bool = False,
 ) -> Memory:
     text = normalize_content(content, settings)
     normalized_tags = normalize_tags(tags)
     embeddings = await embed_texts([text], settings)
 
+    owner = str(member_id) if member_id > 0 else "shared"
+    visibility = "shared" if shared or member_id <= 0 else "private"
+
     store = MemoryStore(settings.memory_db_path)
     try:
-        return store.add(text, normalized_tags, source, embeddings[0])
+        return store.add(
+            text,
+            normalized_tags,
+            source,
+            embeddings[0],
+            owner=owner,
+            visibility=visibility,
+        )
     finally:
         store.close()
 
@@ -53,24 +69,37 @@ async def update_memory(
     memory_id: int,
     content: str | None,
     tags: list[str] | None,
+    shared: bool | None,
     settings: Settings,
+    member_id: int = 0,
 ) -> Memory:
-    if content is None and tags is None:
+    if content is None and tags is None and shared is None:
         raise MemoryValidationError("no fields to update")
 
+    owner = _owner(member_id)
     store = MemoryStore(settings.memory_db_path)
     try:
-        existing = store.get(memory_id)
+        existing = store.get(memory_id, owner)
         if existing is None:
             raise MemoryNotFoundError
 
         new_content = normalize_content(content, settings) if content is not None else None
         new_tags = normalize_tags(tags) if tags is not None else None
+        visibility = None
+        if shared is not None:
+            visibility = "shared" if shared else "private"
         embedding = None
         if new_content is not None and new_content != existing.content:
             embedding = (await embed_texts([new_content], settings))[0]
 
-        updated = store.update(memory_id, new_content, new_tags, embedding)
+        updated = store.update(
+            memory_id,
+            new_content,
+            new_tags,
+            visibility,
+            embedding,
+            owner,
+        )
         if updated is None:
             raise MemoryNotFoundError
         return updated
@@ -78,10 +107,14 @@ async def update_memory(
         store.close()
 
 
-async def delete_memory(memory_id: int, settings: Settings) -> bool:
+async def delete_memory(
+    memory_id: int,
+    settings: Settings,
+    member_id: int = 0,
+) -> bool:
     store = MemoryStore(settings.memory_db_path)
     try:
-        return store.delete(memory_id)
+        return store.delete(memory_id, _owner(member_id))
     finally:
         store.close()
 
@@ -90,23 +123,31 @@ async def list_memories(
     query: str | None,
     limit: int,
     settings: Settings,
+    member_id: int = 0,
 ) -> list[Memory] | list[MemorySearchResult]:
+    owner = _owner(member_id)
     if query is not None and query.strip():
         embedding = await embed_query(query.strip(), settings)
         store = MemoryStore(settings.memory_db_path)
         try:
-            return store.search(embedding, limit, settings.memory_min_score)
+            return store.search(
+                embedding, limit, settings.memory_min_score, owner
+            )
         finally:
             store.close()
 
     store = MemoryStore(settings.memory_db_path)
     try:
-        return store.recent(limit)
+        return store.list(limit, owner)
     finally:
         store.close()
 
 
-async def build_context(question: str, settings: Settings) -> str | None:
+async def build_context(
+    question: str,
+    settings: Settings,
+    member_id: int = 0,
+) -> str | None:
     embedding = await embed_query(question, settings)
 
     store = MemoryStore(settings.memory_db_path)
@@ -115,6 +156,7 @@ async def build_context(question: str, settings: Settings) -> str | None:
             embedding,
             settings.memory_top_k,
             settings.memory_min_score,
+            _owner(member_id),
         )
     finally:
         store.close()

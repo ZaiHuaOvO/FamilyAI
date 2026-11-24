@@ -13,10 +13,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     due_at TEXT,
     done INTEGER NOT NULL DEFAULT 0,
     owner TEXT NOT NULL DEFAULT 'shared',
+    shared INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner);
 """
 
 UNSET = object()
@@ -30,6 +32,7 @@ class Task:
     due_at: str | None
     done: bool
     owner: str
+    shared: bool
     created_at: str
     updated_at: str
 
@@ -58,6 +61,7 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         due_at=row["due_at"],
         done=bool(row["done"]),
         owner=row["owner"],
+        shared=bool(row["shared"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -70,28 +74,56 @@ class TaskStore:
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
+        }
+        if "shared" not in columns:
+            self._conn.execute(
+                "ALTER TABLE tasks ADD COLUMN shared INTEGER NOT NULL DEFAULT 0"
+            )
+            self._conn.execute(
+                "UPDATE tasks SET shared = 1 WHERE owner = 'shared'"
+            )
 
     def close(self) -> None:
         self._conn.close()
 
-    def add(self, title: str, notes: str, due_at: str | None) -> Task:
+    def add(
+        self,
+        title: str,
+        notes: str,
+        due_at: str | None,
+        owner: str = "shared",
+        shared: bool = True,
+    ) -> Task:
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._conn:
             cursor = self._conn.execute(
-                "INSERT INTO tasks (title, notes, due_at, done, created_at, updated_at) "
-                "VALUES (?, ?, ?, 0, ?, ?)",
-                (title, notes, due_at, now, now),
+                "INSERT INTO tasks "
+                "(title, notes, due_at, done, owner, shared, created_at, updated_at) "
+                "VALUES (?, ?, ?, 0, ?, ?, ?, ?)",
+                (title, notes, due_at, owner, int(shared), now, now),
             )
             task_id = cursor.lastrowid
         task = self.get(task_id)
         assert task is not None
         return task
 
-    def get(self, task_id: int) -> Task | None:
-        row = self._conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+    def get(self, task_id: int, owner: str | None = None) -> Task | None:
+        if owner is None:
+            row = self._conn.execute(
+                "SELECT * FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT * FROM tasks WHERE id = ? AND owner = ?",
+                (task_id, owner),
+            ).fetchone()
         return _row_to_task(row) if row is not None else None
 
     def list(
@@ -99,8 +131,15 @@ class TaskStore:
         status: str = "all",
         due: str = "all",
         now: datetime | None = None,
+        owner: str | None = None,
     ) -> list[Task]:
-        rows = self._conn.execute("SELECT * FROM tasks").fetchall()
+        if owner is None:
+            rows = self._conn.execute("SELECT * FROM tasks").fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM tasks WHERE owner = ? OR shared = 1", (owner,)
+            ).fetchall()
+
         tasks = [_row_to_task(row) for row in rows]
         now = (now or datetime.now().astimezone()).astimezone()
 
@@ -146,8 +185,10 @@ class TaskStore:
         notes: str | None = None,
         due_at: str | None | object = UNSET,
         done: bool | None = None,
+        shared: bool | None = None,
+        owner: str | None = None,
     ) -> Task | None:
-        existing = self.get(task_id)
+        existing = self.get(task_id, owner)
         if existing is None:
             return None
 
@@ -155,17 +196,32 @@ class TaskStore:
         new_notes = notes if notes is not None else existing.notes
         new_due = existing.due_at if due_at is UNSET else due_at
         new_done = existing.done if done is None else done
+        new_shared = existing.shared if shared is None else shared
         now = datetime.now(UTC).isoformat(timespec="seconds")
 
         with self._conn:
             self._conn.execute(
                 "UPDATE tasks SET title = ?, notes = ?, due_at = ?, done = ?, "
-                "updated_at = ? WHERE id = ?",
-                (new_title, new_notes, new_due, int(new_done), now, task_id),
+                "shared = ?, updated_at = ? WHERE id = ?",
+                (
+                    new_title,
+                    new_notes,
+                    new_due,
+                    int(new_done),
+                    int(new_shared),
+                    now,
+                    task_id,
+                ),
             )
         return self.get(task_id)
 
-    def delete(self, task_id: int) -> bool:
+    def delete(self, task_id: int, owner: str | None = None) -> bool:
         with self._conn:
-            cursor = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            if owner is None:
+                cursor = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            else:
+                cursor = self._conn.execute(
+                    "DELETE FROM tasks WHERE id = ? AND owner = ?",
+                    (task_id, owner),
+                )
             return cursor.rowcount > 0

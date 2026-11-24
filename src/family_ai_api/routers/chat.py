@@ -12,7 +12,7 @@ from family_ai_api.config import Settings, get_settings
 from family_ai_api.knowledge.embeddings import EmbeddingError
 from family_ai_api.memory import service as memory_service
 from family_ai_api.memory.extractor import run_auto_extraction
-from family_ai_api.security import require_token
+from family_ai_api.security import MemberContext, require_member
 from family_ai_api.services import ollama_client
 from family_ai_api.services.chat_guard import acquire_slot, enforce_rate_limit
 
@@ -82,9 +82,10 @@ async def add_memory_context(
     messages: list[dict[str, str]],
     message: str,
     settings: Settings,
+    member_id: int,
 ) -> list[dict[str, str]]:
     try:
-        context = await memory_service.build_context(message, settings)
+        context = await memory_service.build_context(message, settings, member_id)
     except (EmbeddingError, ValueError):
         logger.warning("memory retrieval skipped")
         return messages
@@ -99,23 +100,24 @@ async def chat(
     payload: ChatRequest,
     request: Request,
     background: BackgroundTasks,
-    token_key: Annotated[str, Depends(require_token)],
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ChatResponse:
     messages = build_messages(payload, settings)
-    enforce_rate_limit(request, token_key)
+    enforce_rate_limit(request, current.token_key)
     semaphore = await acquire_slot(request)
 
     try:
         if payload.use_memory:
             messages = await add_memory_context(
-                messages, payload.message.strip(), settings
+                messages, payload.message.strip(), settings, current.member.id
             )
         background.add_task(
             run_auto_extraction,
             payload.message.strip(),
             settings,
             getattr(request.app.state, "memory_extraction_semaphore", None),
+            current.member.id,
         )
         started = time.perf_counter()
         result = await ollama_client.chat(messages, settings)
@@ -147,11 +149,11 @@ async def chat_stream(
     payload: ChatRequest,
     request: Request,
     background: BackgroundTasks,
-    token_key: Annotated[str, Depends(require_token)],
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> StreamingResponse:
     messages = build_messages(payload, settings)
-    enforce_rate_limit(request, token_key)
+    enforce_rate_limit(request, current.token_key)
     semaphore: asyncio.Semaphore = request.app.state.chat_semaphore
 
     async def event_generator():
@@ -168,13 +170,14 @@ async def chat_stream(
             stream_messages = messages
             if payload.use_memory:
                 stream_messages = await add_memory_context(
-                    messages, payload.message.strip(), settings
+                    messages, payload.message.strip(), settings, current.member.id
                 )
             background.add_task(
                 run_auto_extraction,
                 payload.message.strip(),
                 settings,
                 getattr(request.app.state, "memory_extraction_semaphore", None),
+                current.member.id,
             )
 
             started = time.perf_counter()

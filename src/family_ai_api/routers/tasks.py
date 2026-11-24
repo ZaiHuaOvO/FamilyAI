@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from family_ai_api.config import Settings, get_settings
-from family_ai_api.security import require_token
+from family_ai_api.security import MemberContext, require_member
 from family_ai_api.tasks import service as task_service
 from family_ai_api.tasks.store import Task, TaskStore
 from family_ai_api.tasks.weather import Weather
@@ -17,6 +17,7 @@ class TaskCreateRequest(BaseModel):
     title: str
     notes: str = ""
     due_at: str | None = None
+    shared: bool = False
 
 
 class TaskUpdateRequest(BaseModel):
@@ -24,6 +25,7 @@ class TaskUpdateRequest(BaseModel):
     notes: str | None = None
     due_at: str | None = None
     done: bool | None = None
+    shared: bool | None = None
 
 
 class TaskResponse(BaseModel):
@@ -32,6 +34,7 @@ class TaskResponse(BaseModel):
     notes: str
     due_at: str | None
     done: bool
+    shared: bool
     created_at: str
     updated_at: str
 
@@ -64,6 +67,7 @@ def _task_response(task: Task) -> TaskResponse:
         notes=task.notes,
         due_at=task.due_at,
         done=task.done,
+        shared=task.shared,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -84,10 +88,10 @@ def _weather_response(weather: Weather) -> WeatherResponse:
     "/tasks",
     response_model=TaskResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_token)],
 )
 async def create_task(
     payload: TaskCreateRequest,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> TaskResponse:
     try:
@@ -101,7 +105,13 @@ async def create_task(
 
     store = TaskStore(settings.tasks_db_path)
     try:
-        task = store.add(title, notes, due_at)
+        task = store.add(
+            title,
+            notes,
+            due_at,
+            owner=str(current.member.id),
+            shared=payload.shared,
+        )
     finally:
         store.close()
     return _task_response(task)
@@ -110,9 +120,9 @@ async def create_task(
 @router.get(
     "/tasks",
     response_model=TaskListResponse,
-    dependencies=[Depends(require_token)],
 )
 async def list_tasks(
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
     status_filter: Annotated[
         Literal["all", "open", "done"], Query(alias="status")
@@ -121,7 +131,11 @@ async def list_tasks(
 ) -> TaskListResponse:
     store = TaskStore(settings.tasks_db_path)
     try:
-        tasks = store.list(status=status_filter, due=due)
+        tasks = store.list(
+            status=status_filter,
+            due=due,
+            owner=str(current.member.id),
+        )
     finally:
         store.close()
     return TaskListResponse(entries=[_task_response(task) for task in tasks])
@@ -130,11 +144,11 @@ async def list_tasks(
 @router.patch(
     "/tasks/{task_id}",
     response_model=TaskResponse,
-    dependencies=[Depends(require_token)],
 )
 async def update_task(
     task_id: int,
     payload: TaskUpdateRequest,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> TaskResponse:
     fields = payload.model_fields_set
@@ -149,6 +163,8 @@ async def update_task(
             updates["due_at"] = task_service.normalize_due_at(payload.due_at)
         if "done" in fields and payload.done is not None:
             updates["done"] = payload.done
+        if "shared" in fields and payload.shared is not None:
+            updates["shared"] = payload.shared
     except task_service.TaskValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
@@ -162,7 +178,7 @@ async def update_task(
 
     store = TaskStore(settings.tasks_db_path)
     try:
-        task = store.update(task_id, **updates)
+        task = store.update(task_id, owner=str(current.member.id), **updates)
     finally:
         store.close()
 
@@ -173,14 +189,15 @@ async def update_task(
     return _task_response(task)
 
 
-@router.delete("/tasks/{task_id}", dependencies=[Depends(require_token)])
+@router.delete("/tasks/{task_id}")
 async def delete_task(
     task_id: int,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, bool]:
     store = TaskStore(settings.tasks_db_path)
     try:
-        deleted = store.delete(task_id)
+        deleted = store.delete(task_id, owner=str(current.member.id))
     finally:
         store.close()
 
@@ -191,11 +208,12 @@ async def delete_task(
     return {"deleted": True}
 
 
-@router.get("/briefing", response_model=BriefingResponse, dependencies=[Depends(require_token)])
+@router.get("/briefing", response_model=BriefingResponse)
 async def briefing(
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> BriefingResponse:
-    data = await task_service.build_briefing(settings)
+    data = await task_service.build_briefing(settings, current.member.id)
     weather = data["weather"]
     return BriefingResponse(
         date=data["date"],
@@ -254,6 +272,7 @@ TASKS_PAGE = """<!doctype html>
 <div class="row">
   <input id="title" class="title" placeholder="任务标题">
   <input id="due" type="datetime-local">
+  <label><input id="shared" type="checkbox"> 全家共享</label>
   <button id="add" type="button">新增</button>
 </div>
 <textarea id="notes" placeholder="备注（可选）"></textarea>
@@ -278,7 +297,7 @@ TASKS_PAGE = """<!doctype html>
   </select>
 </div>
 <table>
-  <thead><tr><th>完成</th><th>标题</th><th>到期</th><th>备注</th><th>操作</th></tr></thead>
+  <thead><tr><th>完成</th><th>标题</th><th>到期</th><th>备注</th><th>共享</th><th>操作</th></tr></thead>
   <tbody id="body"></tbody>
 </table>
 <script>
@@ -286,6 +305,7 @@ const tokenInput = document.getElementById('token');
 const titleInput = document.getElementById('title');
 const dueInput = document.getElementById('due');
 const notesInput = document.getElementById('notes');
+const sharedInput = document.getElementById('shared');
 const statusEl = document.getElementById('status');
 const briefingEl = document.getElementById('briefing');
 const tbody = document.getElementById('body');
@@ -329,7 +349,17 @@ function render(entries) {
     row.appendChild(cell(task.title));
     row.appendChild(cell(task.due_at || ''));
     row.appendChild(cell(task.notes || ''));
+    row.appendChild(cell(task.shared ? '是' : '否'));
     const actions = document.createElement('td');
+    const share = document.createElement('button');
+    share.textContent = task.shared ? '设为私有' : '共享';
+    share.className = 'secondary';
+    share.onclick = async () => {
+      try { await api('/api/v1/tasks/' + task.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared: !task.shared })
+      }); await load(); } catch (e) { statusEl.textContent = '修改共享失败：' + e.message; }
+    };
     const edit = document.createElement('button');
     edit.textContent = '编辑';
     edit.className = 'secondary';
@@ -351,7 +381,7 @@ function render(entries) {
     };
     const wrap = document.createElement('div');
     wrap.className = 'actions';
-    wrap.append(edit, remove);
+    wrap.append(share, edit, remove);
     actions.appendChild(wrap);
     row.appendChild(actions);
     tbody.appendChild(row);
@@ -380,9 +410,15 @@ document.getElementById('add').onclick = async () => {
   try {
     await api('/api/v1/tasks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, notes: notesInput.value, due_at: due })
+      body: JSON.stringify({
+        title,
+        notes: notesInput.value,
+        due_at: due,
+        shared: sharedInput.checked
+      })
     });
     titleInput.value = ''; dueInput.value = ''; notesInput.value = '';
+    sharedInput.checked = false;
     await load();
   } catch (e) { statusEl.textContent = '新增失败：' + e.message; }
 };

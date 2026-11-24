@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     agent_max_tool_result_chars: int = 6000
     agent_action_ttl_seconds: int = 300
     agent_audit_size: int = 200
+    members_db_path: str = "data/members.db"
 
     @field_validator("weather_latitude", "weather_longitude", mode="before")
     @classmethod

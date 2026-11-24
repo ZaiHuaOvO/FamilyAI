@@ -5,8 +5,11 @@ from fastapi.testclient import TestClient
 
 from family_ai_api.config import Settings, get_settings
 from family_ai_api.main import app
+from family_ai_api.members.store import MemberStore
 
 AUTH = {"Authorization": "Bearer test-token"}
+ALICE = {"Authorization": "Bearer alice-token"}
+BOB = {"Authorization": "Bearer bob-token"}
 
 
 @pytest.fixture
@@ -17,6 +20,7 @@ def task_client(tmp_path):
         tasks_db_path=str(tmp_path / "tasks.db"),
         auto_memory_enabled=False,
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as client:
@@ -79,6 +83,50 @@ def test_task_crud_and_filters(task_client) -> None:
     assert deleted.status_code == 200
     assert deleted.json() == {"deleted": True}
     assert client.delete(f"/api/v1/tasks/{today_id}", headers=AUTH).status_code == 404
+
+
+def test_task_private_and_shared_visibility(task_client) -> None:
+    client, settings = task_client
+    members = MemberStore(settings.members_db_path)
+    try:
+        members.add("alice", "member", "alice-token")
+        members.add("bob", "member", "bob-token")
+    finally:
+        members.close()
+
+    private = client.post(
+        "/api/v1/tasks", headers=ALICE, json={"title": "alice-private"}
+    )
+    assert private.status_code == 201
+    assert private.json()["shared"] is False
+
+    shared = client.post(
+        "/api/v1/tasks",
+        headers=ALICE,
+        json={"title": "family-shared", "shared": True},
+    )
+    assert shared.status_code == 201
+    assert shared.json()["shared"] is True
+    shared_id = shared.json()["id"]
+
+    bob_tasks = client.get("/api/v1/tasks", headers=BOB).json()["entries"]
+    assert [task["title"] for task in bob_tasks] == ["family-shared"]
+    assert (
+        client.patch(
+            f"/api/v1/tasks/{shared_id}", headers=BOB, json={"done": True}
+        ).status_code
+        == 404
+    )
+    assert client.delete(f"/api/v1/tasks/{shared_id}", headers=BOB).status_code == 404
+
+    bob_briefing = client.get("/api/v1/briefing", headers=BOB).json()
+    assert bob_briefing["counts"]["open"] == 1
+
+    alice_tasks = client.get("/api/v1/tasks", headers=ALICE).json()["entries"]
+    assert {task["title"] for task in alice_tasks} == {
+        "alice-private",
+        "family-shared",
+    }
 
 
 def test_task_validation(task_client) -> None:

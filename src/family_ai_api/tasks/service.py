@@ -38,11 +38,12 @@ def normalize_due_at(due_at: str | None) -> str | None:
     return parsed.astimezone().isoformat()
 
 
-async def build_briefing(settings: Settings) -> dict:
+async def build_briefing(settings: Settings, member_id: int = 0) -> dict:
     now = datetime.now().astimezone()
+    owner = str(member_id) if member_id > 0 else None
     store = TaskStore(settings.tasks_db_path)
     try:
-        open_tasks = store.list(status="open", now=now)
+        open_tasks = store.list(status="open", now=now, owner=owner)
     finally:
         store.close()
 

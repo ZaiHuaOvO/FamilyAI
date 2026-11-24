@@ -7,7 +7,7 @@ from family_ai_api.config import Settings, get_settings
 from family_ai_api.knowledge import service as rag_service
 from family_ai_api.knowledge.embeddings import EmbeddingError
 from family_ai_api.knowledge.store import KnowledgeStore
-from family_ai_api.security import require_token
+from family_ai_api.security import MemberContext, require_member
 from family_ai_api.services import ollama_client
 from family_ai_api.services.chat_guard import acquire_slot, enforce_rate_limit
 
@@ -37,7 +37,7 @@ class RagQueryResponse(BaseModel):
 async def rag_query(
     payload: RagQueryRequest,
     request: Request,
-    token_key: Annotated[str, Depends(require_token)],
+    token_key: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> RagQueryResponse:
     message = payload.message.strip()
@@ -52,7 +52,7 @@ async def rag_query(
             detail="message is too long",
         )
 
-    enforce_rate_limit(request, token_key)
+    enforce_rate_limit(request, token_key.token_key)
     semaphore = await acquire_slot(request)
 
     try:
@@ -94,7 +94,7 @@ async def rag_query(
     )
 
 
-@router.get("/kb/stats", dependencies=[Depends(require_token)])
+@router.get("/kb/stats", dependencies=[Depends(require_member)])
 async def kb_stats(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:

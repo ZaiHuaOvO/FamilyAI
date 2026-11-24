@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from family_ai_api.agent import planner, registry
 from family_ai_api.config import Settings, get_settings
 from family_ai_api.knowledge.embeddings import EmbeddingError
-from family_ai_api.security import require_token
+from family_ai_api.security import MemberContext, require_admin, require_member
 from family_ai_api.services import ollama_client
 from family_ai_api.services.chat_guard import acquire_slot, enforce_rate_limit
 
@@ -54,6 +54,7 @@ class AuditEntryModel(BaseModel):
     status: str
     duration_ms: float
     action_id: str | None
+    member_id: int | None = None
 
 
 class AuditResponse(BaseModel):
@@ -79,10 +80,18 @@ def _audit(
     status: str,
     started: float,
     action_id: str | None = None,
+    member_id: int | None = None,
 ) -> None:
     _, audit = _agent_state(request)
     if audit is not None:
-        audit.add(tool, write, status, (time.perf_counter() - started) * 1000, action_id)
+        audit.add(
+            tool,
+            write,
+            status,
+            (time.perf_counter() - started) * 1000,
+            action_id,
+            member_id,
+        )
 
 
 def _ollama_http_error(exc: ollama_client.OllamaError) -> HTTPException:
@@ -93,7 +102,7 @@ def _ollama_http_error(exc: ollama_client.OllamaError) -> HTTPException:
 async def agent_chat(
     payload: AgentChatRequest,
     request: Request,
-    token_key: Annotated[str, Depends(require_token)],
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AgentChatResponse:
     if not settings.agent_enabled:
@@ -114,7 +123,7 @@ async def agent_chat(
             detail="message is too long",
         )
 
-    enforce_rate_limit(request, token_key)
+    enforce_rate_limit(request, current.token_key)
     semaphore = await acquire_slot(request)
     try:
         try:
@@ -141,7 +150,9 @@ async def agent_chat(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="agent actions are not initialized",
                 )
-            action = actions.create(plan.tool.name, plan.arguments, token_key)
+            action = actions.create(
+                plan.tool.name, plan.arguments, current.token_key
+            )
             return AgentChatResponse(
                 answer=planner.confirmation_text(plan),
                 pending_action=PendingActionInfo(
@@ -155,20 +166,41 @@ async def agent_chat(
         started = time.perf_counter()
         try:
             result = await registry.execute_tool(
-                plan.tool.name, plan.arguments, settings
+                plan.tool.name, plan.arguments, settings, current.member.id
             )
         except (registry.ToolExecutionError, registry.ToolValidationError) as exc:
-            _audit(request, plan.tool.name, False, "error", started)
+            _audit(
+                request,
+                plan.tool.name,
+                False,
+                "error",
+                started,
+                member_id=current.member.id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
             ) from exc
         except EmbeddingError as exc:
-            _audit(request, plan.tool.name, False, "error", started)
+            _audit(
+                request,
+                plan.tool.name,
+                False,
+                "error",
+                started,
+                member_id=current.member.id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="embedding service unavailable",
             ) from exc
-        _audit(request, plan.tool.name, False, "ok", started)
+        _audit(
+            request,
+            plan.tool.name,
+            False,
+            "ok",
+            started,
+            member_id=current.member.id,
+        )
 
         result_text = registry.tool_result_text(
             result, settings.agent_max_tool_result_chars
@@ -189,7 +221,7 @@ async def agent_chat(
 @router.get(
     "/agent/tools",
     response_model=ToolListResponse,
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_member)],
 )
 async def list_tools() -> ToolListResponse:
     return ToolListResponse(tools=[ToolInfo(**spec) for spec in registry.tool_specs()])
@@ -198,7 +230,7 @@ async def list_tools() -> ToolListResponse:
 @router.get(
     "/agent/audit",
     response_model=AuditResponse,
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_admin)],
 )
 async def list_audit(
     request: Request,
@@ -218,7 +250,7 @@ async def list_audit(
 async def confirm_action(
     action_id: str,
     request: Request,
-    token_key: Annotated[str, Depends(require_token)],
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ConfirmResponse:
     if not settings.agent_enabled or not settings.agent_write_tools_enabled:
@@ -234,7 +266,7 @@ async def confirm_action(
             detail="agent actions are not initialized",
         )
 
-    action = actions.get(action_id, token_key)
+    action = actions.get(action_id, current.token_key)
     if action is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -250,10 +282,10 @@ async def confirm_action(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
-    enforce_rate_limit(request, token_key)
+    enforce_rate_limit(request, current.token_key)
     semaphore = await acquire_slot(request)
     try:
-        action = actions.pop(action_id, token_key)
+        action = actions.pop(action_id, current.token_key)
         if action is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -262,20 +294,46 @@ async def confirm_action(
 
         started = time.perf_counter()
         try:
-            result = await registry.execute_tool(action.tool, normalized, settings)
+            result = await registry.execute_tool(
+                action.tool, normalized, settings, current.member.id
+            )
         except (registry.ToolExecutionError, registry.ToolValidationError) as exc:
-            _audit(request, action.tool, True, "error", started, action.id)
+            _audit(
+                request,
+                action.tool,
+                True,
+                "error",
+                started,
+                action.id,
+                current.member.id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail=str(exc)
             ) from exc
         except EmbeddingError as exc:
-            _audit(request, action.tool, True, "error", started, action.id)
+            _audit(
+                request,
+                action.tool,
+                True,
+                "error",
+                started,
+                action.id,
+                current.member.id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="embedding service unavailable",
             ) from exc
 
-        _audit(request, action.tool, True, "ok", started, action.id)
+        _audit(
+            request,
+            action.tool,
+            True,
+            "ok",
+            started,
+            action.id,
+            current.member.id,
+        )
         return ConfirmResponse(
             executed=True,
             tool=action.tool,
@@ -291,7 +349,7 @@ async def confirm_action(
 async def cancel_action(
     action_id: str,
     request: Request,
-    token_key: Annotated[str, Depends(require_token)],
+    current: Annotated[MemberContext, Depends(require_member)],
 ) -> dict[str, bool]:
     actions, _ = _agent_state(request)
     if actions is None:
@@ -299,8 +357,8 @@ async def cancel_action(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="action not found or expired",
         )
-    enforce_rate_limit(request, token_key)
-    if not actions.cancel(action_id, token_key):
+    enforce_rate_limit(request, current.token_key)
+    if not actions.cancel(action_id, current.token_key):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="action not found or expired",

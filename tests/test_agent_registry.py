@@ -41,7 +41,7 @@ def test_validate_arguments() -> None:
     ) == {"task_id": 3}
     assert registry.validate_arguments(
         "add_memory", {"content": "喜欢户外", "tags": ["家庭"]}, config
-    ) == {"content": "喜欢户外", "tags": ["家庭"]}
+    ) == {"content": "喜欢户外", "tags": ["家庭"], "shared": False}
 
 
 def test_validate_arguments_rejects_bad_input() -> None:
@@ -77,21 +77,22 @@ async def test_read_and_write_task_tools(tmp_path) -> None:
         "create_task",
         {"title": "测试任务", "notes": "", "due_at": None},
         config,
+        1,
     )
     assert created["title"] == "测试任务"
     task_id = created["id"]
 
     listed = await registry.execute_tool(
-        "list_tasks", {"status": "open", "due": "all"}, config
+        "list_tasks", {"status": "open", "due": "all"}, config, 1
     )
     assert [task["id"] for task in listed["entries"]] == [task_id]
 
     completed = await registry.execute_tool(
-        "complete_task", {"task_id": task_id}, config
+        "complete_task", {"task_id": task_id}, config, 1
     )
     assert completed["done"] is True
 
-    briefing = await registry.execute_tool("get_briefing", {}, config)
+    briefing = await registry.execute_tool("get_briefing", {}, config, 1)
     assert briefing["counts"]["open"] == 0
 
     store = TaskStore(config.tasks_db_path)
@@ -119,16 +120,54 @@ async def test_memory_tools(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     created = await registry.execute_tool(
-        "add_memory", {"content": "喜欢户外", "tags": ["家庭"]}, config
+        "add_memory", {"content": "喜欢户外", "tags": ["家庭"]}, config, 1
     )
     assert created["content"] == "喜欢户外"
     assert created["source"] == "agent"
 
     listed = await registry.execute_tool(
-        "list_memories", {"query": "户外", "limit": 5}, config
+        "list_memories", {"query": "户外", "limit": 5}, config, 1
     )
     assert listed["entries"][0]["content"] == "喜欢户外"
     assert listed["entries"][0]["score"] == pytest.approx(1.0)
+
+    other = await registry.execute_tool(
+        "list_memories", {"query": None, "limit": 5}, config, 2
+    )
+    assert other["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_tool_owner_filtering(tmp_path) -> None:
+    config = settings(tmp_path)
+
+    private = await registry.execute_tool(
+        "create_task",
+        {"title": "private", "notes": "", "due_at": None, "shared": False},
+        config,
+        1,
+    )
+    await registry.execute_tool(
+        "create_task",
+        {"title": "shared", "notes": "", "due_at": None, "shared": True},
+        config,
+        1,
+    )
+
+    listed = await registry.execute_tool(
+        "list_tasks", {"status": "all", "due": "all"}, config, 2
+    )
+    assert [task["title"] for task in listed["entries"]] == ["shared"]
+
+    with pytest.raises(registry.ToolExecutionError):
+        await registry.execute_tool(
+            "complete_task", {"task_id": private["id"]}, config, 2
+        )
+
+    completed = await registry.execute_tool(
+        "complete_task", {"task_id": private["id"]}, config, 1
+    )
+    assert completed["done"] is True
 
 
 @pytest.mark.asyncio
@@ -148,7 +187,7 @@ async def test_search_knowledge_tool(tmp_path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("family_ai_api.agent.registry.embed_query", fake_embed_query)
 
     result = await registry.execute_tool(
-        "search_knowledge", {"query": "内容", "top_k": 3}, config
+        "search_knowledge", {"query": "内容", "top_k": 3}, config, 1
     )
 
     assert result["results"][0]["source"] == "doc.md"

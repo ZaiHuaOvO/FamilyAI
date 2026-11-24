@@ -96,6 +96,7 @@ TOOLS: dict[str, ToolSpec] = {
                     "type": "string",
                     "description": "ISO 8601 时间，可选；只有用户明确给出日期时才填写，不要猜测",
                 },
+                "shared": {"type": "boolean", "description": "是否全家共享，默认 false"},
             },
             "required": ["title"],
             "additionalProperties": False,
@@ -121,6 +122,7 @@ TOOLS: dict[str, ToolSpec] = {
             "properties": {
                 "content": {"type": "string"},
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "shared": {"type": "boolean", "description": "是否全家共享，默认 false"},
             },
             "required": ["content"],
             "additionalProperties": False,
@@ -191,6 +193,15 @@ def _integer(
     return value
 
 
+def _boolean(arguments: dict, key: str, default: bool = False) -> bool:
+    value = arguments.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ToolValidationError(f"{key} must be a boolean")
+    return value
+
+
 def validate_arguments(
     name: str,
     arguments: dict | None,
@@ -231,14 +242,19 @@ def validate_arguments(
         return {"query": query, "limit": limit}
 
     if name == "create_task":
-        _reject_extra(arguments, {"title", "notes", "due_at"})
+        _reject_extra(arguments, {"title", "notes", "due_at", "shared"})
         try:
             title = task_service.normalize_title(_text(arguments, "title", required=True) or "")
             notes = task_service.normalize_notes(_text(arguments, "notes") or "")
             due_at = task_service.normalize_due_at(_text(arguments, "due_at"))
         except task_service.TaskValidationError as exc:
             raise ToolValidationError(str(exc)) from exc
-        return {"title": title, "notes": notes, "due_at": due_at}
+        return {
+            "title": title,
+            "notes": notes,
+            "due_at": due_at,
+            "shared": _boolean(arguments, "shared"),
+        }
 
     if name == "complete_task":
         _reject_extra(arguments, {"task_id"})
@@ -248,7 +264,7 @@ def validate_arguments(
         return {"task_id": task_id}
 
     if name == "add_memory":
-        _reject_extra(arguments, {"content", "tags"})
+        _reject_extra(arguments, {"content", "tags", "shared"})
         raw_content = _text(arguments, "content", required=True)
         raw_tags = arguments.get("tags", [])
         if not isinstance(raw_tags, list) or any(
@@ -260,7 +276,11 @@ def validate_arguments(
             tags = memory_service.normalize_tags(raw_tags)
         except memory_service.MemoryValidationError as exc:
             raise ToolValidationError(str(exc)) from exc
-        return {"content": content, "tags": tags}
+        return {
+            "content": content,
+            "tags": tags,
+            "shared": _boolean(arguments, "shared"),
+        }
 
     raise UnknownToolError(name)
 
@@ -289,6 +309,7 @@ def _task_dict(task: Task) -> dict[str, Any]:
         "notes": task.notes,
         "due_at": task.due_at,
         "done": task.done,
+        "shared": task.shared,
     }
 
 
@@ -298,18 +319,28 @@ def _memory_dict(memory) -> dict[str, Any]:
         "content": memory.content,
         "tags": memory.tags,
         "source": memory.source,
+        "shared": memory.shared,
         "updated_at": memory.updated_at,
     }
 
 
-async def execute_tool(name: str, arguments: dict, settings: Settings) -> Any:
+async def execute_tool(
+    name: str,
+    arguments: dict,
+    settings: Settings,
+    member_id: int,
+) -> Any:
+    owner = str(member_id) if member_id > 0 else None
+
     if name == "get_briefing":
-        return to_jsonable(await task_service.build_briefing(settings))
+        return to_jsonable(await task_service.build_briefing(settings, member_id))
 
     if name == "list_tasks":
         store = TaskStore(settings.tasks_db_path)
         try:
-            tasks = store.list(status=arguments["status"], due=arguments["due"])
+            tasks = store.list(
+                status=arguments["status"], due=arguments["due"], owner=owner
+            )
         finally:
             store.close()
         return {"entries": [_task_dict(task) for task in tasks]}
@@ -336,7 +367,10 @@ async def execute_tool(name: str, arguments: dict, settings: Settings) -> Any:
 
     if name == "list_memories":
         entries = await memory_service.list_memories(
-            arguments["query"], arguments["limit"], settings
+            arguments["query"],
+            arguments["limit"],
+            settings,
+            member_id=member_id,
         )
         if entries and isinstance(entries[0], MemorySearchResult):
             return {
@@ -351,7 +385,11 @@ async def execute_tool(name: str, arguments: dict, settings: Settings) -> Any:
         store = TaskStore(settings.tasks_db_path)
         try:
             task = store.add(
-                arguments["title"], arguments["notes"], arguments["due_at"]
+                arguments["title"],
+                arguments["notes"],
+                arguments["due_at"],
+                owner=owner or "shared",
+                shared=arguments.get("shared", False),
             )
         finally:
             store.close()
@@ -360,7 +398,7 @@ async def execute_tool(name: str, arguments: dict, settings: Settings) -> Any:
     if name == "complete_task":
         store = TaskStore(settings.tasks_db_path)
         try:
-            task = store.update(arguments["task_id"], done=True)
+            task = store.update(arguments["task_id"], done=True, owner=owner)
         finally:
             store.close()
         if task is None:
@@ -374,6 +412,8 @@ async def execute_tool(name: str, arguments: dict, settings: Settings) -> Any:
                 arguments["tags"],
                 settings,
                 source="agent",
+                member_id=member_id,
+                shared=arguments.get("shared", False),
             )
         except DuplicateMemoryError as exc:
             raise ToolExecutionError("memory already exists") from exc

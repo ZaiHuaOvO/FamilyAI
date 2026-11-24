@@ -3,10 +3,13 @@ from fastapi.testclient import TestClient
 
 from family_ai_api.config import Settings, get_settings
 from family_ai_api.main import app
+from family_ai_api.members.store import MemberStore
 from family_ai_api.memory.store import MemoryStore
 from family_ai_api.services import ollama_client
 
 AUTH = {"Authorization": "Bearer test-token"}
+ALICE = {"Authorization": "Bearer alice-token"}
+BOB = {"Authorization": "Bearer bob-token"}
 
 
 @pytest.fixture
@@ -15,6 +18,7 @@ def memory_client(tmp_path, monkeypatch: pytest.MonkeyPatch):
         api_access_token="test-token",
         ai_model="test-model",
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
         auto_memory_enabled=False,
         memory_min_score=0.0,
         memory_top_k=5,
@@ -158,6 +162,60 @@ def test_memory_content_not_in_logs(memory_client) -> None:
     assert logs.status_code == 200
     assert "private-memory-content" not in logs.text
     assert "test-token" not in logs.text
+
+
+def test_memory_private_and_shared_visibility(memory_client) -> None:
+    client, settings = memory_client
+    members = MemberStore(settings.members_db_path)
+    try:
+        members.add("alice", "member", "alice-token")
+        members.add("bob", "member", "bob-token")
+    finally:
+        members.close()
+
+    private = client.post(
+        "/api/v1/memory",
+        headers=ALICE,
+        json={"content": "alice-private"},
+    )
+    assert private.status_code == 201
+    assert private.json()["shared"] is False
+
+    shared = client.post(
+        "/api/v1/memory",
+        headers=ALICE,
+        json={"content": "family-shared", "shared": True},
+    )
+    assert shared.status_code == 201
+    assert shared.json()["shared"] is True
+    shared_id = shared.json()["id"]
+
+    bob_entries = client.get("/api/v1/memory", headers=BOB).json()["entries"]
+    assert [entry["content"] for entry in bob_entries] == ["family-shared"]
+
+    alice_entries = client.get("/api/v1/memory", headers=ALICE).json()["entries"]
+    assert {entry["content"] for entry in alice_entries} == {
+        "alice-private",
+        "family-shared",
+    }
+
+    assert (
+        client.patch(
+            f"/api/v1/memory/{shared_id}",
+            headers=BOB,
+            json={"content": "hacked"},
+        ).status_code
+        == 404
+    )
+    assert client.delete(f"/api/v1/memory/{shared_id}", headers=BOB).status_code == 404
+    assert (
+        client.patch(
+            f"/api/v1/memory/{shared_id}",
+            headers=ALICE,
+            json={"shared": False},
+        ).status_code
+        == 200
+    )
 
 
 def test_chat_uses_memory_when_opted_in(

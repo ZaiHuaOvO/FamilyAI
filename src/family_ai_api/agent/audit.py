@@ -13,6 +13,7 @@ class AuditEntry:
     status: str
     duration_ms: float
     action_id: str | None
+    member_id: int | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -22,6 +23,7 @@ class AuditEntry:
             "status": self.status,
             "duration_ms": self.duration_ms,
             "action_id": self.action_id,
+            "member_id": self.member_id,
         }
 
 
@@ -36,6 +38,7 @@ class AuditStore:
         status: str,
         duration_ms: float,
         action_id: str | None = None,
+        member_id: int | None = None,
     ) -> None:
         self._entries.append(
             AuditEntry(
@@ -45,6 +48,7 @@ class AuditStore:
                 status=status,
                 duration_ms=round(duration_ms, 1),
                 action_id=action_id,
+                member_id=member_id,
             )
         )
 

@@ -23,6 +23,7 @@ def client(tmp_path) -> TestClient:
         max_history_chars=50,
         auto_memory_enabled=False,
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as test_client:
@@ -431,6 +432,7 @@ async def test_concurrency_limit(tmp_path, monkeypatch: pytest.MonkeyPatch) -> N
         ai_model="test-model",
         auto_memory_enabled=False,
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.state.chat_semaphore = asyncio.Semaphore(1)
@@ -472,6 +474,7 @@ async def test_stream_concurrency_error_event(tmp_path) -> None:
         ai_model="test-model",
         auto_memory_enabled=False,
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.state.chat_semaphore = asyncio.Semaphore(1)

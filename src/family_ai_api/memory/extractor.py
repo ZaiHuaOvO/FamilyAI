@@ -89,6 +89,7 @@ async def run_auto_extraction(
     message: str,
     settings: Settings,
     semaphore: asyncio.Semaphore | None,
+    member_id: int = 0,
 ) -> None:
     if semaphore is None or not settings.auto_memory_enabled:
         return
@@ -108,10 +109,19 @@ async def run_auto_extraction(
 
         embeddings = await embed_texts([candidate.content for candidate in candidates], settings)
         store = MemoryStore(settings.memory_db_path)
+        owner = str(member_id) if member_id > 0 else "shared"
+        visibility = "private" if member_id > 0 else "shared"
         try:
             for candidate, embedding in zip(candidates, embeddings, strict=True):
                 try:
-                    store.add(candidate.content, candidate.tags, "auto", embedding)
+                    store.add(
+                        candidate.content,
+                        candidate.tags,
+                        "auto",
+                        embedding,
+                        owner=owner,
+                        visibility=visibility,
+                    )
                 except DuplicateMemoryError:
                     continue
         finally:

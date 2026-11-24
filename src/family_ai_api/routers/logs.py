@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 
-from family_ai_api.security import require_token
+from family_ai_api.security import require_admin
 
 router = APIRouter(tags=["logs"])
 
 
-@router.get("/logs", dependencies=[Depends(require_token)])
+@router.get("/logs", dependencies=[Depends(require_admin)])
 async def recent_logs(
     request: Request,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -50,7 +50,7 @@ LOGS_PAGE = """<!doctype html>
 </form>
 <div id="status"></div>
 <table>
-  <thead><tr><th>时间 (UTC)</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th><th>来源</th></tr></thead>
+  <thead><tr><th>时间 (UTC)</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th><th>成员</th><th>来源</th></tr></thead>
   <tbody id="body"></tbody>
 </table>
 <script>
@@ -75,7 +75,9 @@ form.addEventListener('submit', async (event) => {
     for (const entry of data.entries) {
       const row = document.createElement('tr');
       for (const value of [entry.timestamp, entry.method, entry.path,
-                           entry.status, entry.duration_ms + ' ms', entry.client]) {
+                           entry.status, entry.duration_ms + ' ms',
+                           entry.member_id == null ? '-' : entry.member_id,
+                           entry.client]) {
         const cell = document.createElement('td');
         cell.textContent = String(value);
         row.appendChild(cell);

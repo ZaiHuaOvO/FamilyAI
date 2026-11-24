@@ -8,7 +8,7 @@ from family_ai_api.config import Settings, get_settings
 from family_ai_api.knowledge.embeddings import EmbeddingError
 from family_ai_api.memory import service as memory_service
 from family_ai_api.memory.store import DuplicateMemoryError, Memory, MemorySearchResult
-from family_ai_api.security import require_token
+from family_ai_api.security import MemberContext, require_member
 
 router = APIRouter(tags=["memory"])
 
@@ -16,11 +16,13 @@ router = APIRouter(tags=["memory"])
 class MemoryCreateRequest(BaseModel):
     content: str
     tags: list[str] = Field(default_factory=list)
+    shared: bool = False
 
 
 class MemoryUpdateRequest(BaseModel):
     content: str | None = None
     tags: list[str] | None = None
+    shared: bool | None = None
 
 
 class MemoryResponse(BaseModel):
@@ -28,6 +30,7 @@ class MemoryResponse(BaseModel):
     content: str
     tags: list[str]
     source: str
+    shared: bool
     created_at: str
     updated_at: str
     score: float | None = None
@@ -43,6 +46,7 @@ def _response(memory: Memory, score: float | None = None) -> MemoryResponse:
         content=memory.content,
         tags=memory.tags,
         source=memory.source,
+        shared=memory.shared,
         created_at=memory.created_at,
         updated_at=memory.updated_at,
         score=score,
@@ -53,14 +57,20 @@ def _response(memory: Memory, score: float | None = None) -> MemoryResponse:
     "/memory",
     response_model=MemoryResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_token)],
 )
 async def create_memory(
     payload: MemoryCreateRequest,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MemoryResponse:
     try:
-        memory = await memory_service.add_memory(payload.content, payload.tags, settings)
+        memory = await memory_service.add_memory(
+            payload.content,
+            payload.tags,
+            settings,
+            member_id=current.member.id,
+            shared=payload.shared,
+        )
     except memory_service.MemoryValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
@@ -80,15 +90,17 @@ async def create_memory(
 @router.get(
     "/memory",
     response_model=MemoryListResponse,
-    dependencies=[Depends(require_token)],
 )
 async def list_memory(
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
     query: str | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> MemoryListResponse:
     try:
-        entries = await memory_service.list_memories(query, limit, settings)
+        entries = await memory_service.list_memories(
+            query, limit, settings, member_id=current.member.id
+        )
     except EmbeddingError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -110,16 +122,21 @@ async def list_memory(
 @router.patch(
     "/memory/{memory_id}",
     response_model=MemoryResponse,
-    dependencies=[Depends(require_token)],
 )
 async def update_memory(
     memory_id: int,
     payload: MemoryUpdateRequest,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MemoryResponse:
     try:
         memory = await memory_service.update_memory(
-            memory_id, payload.content, payload.tags, settings
+            memory_id,
+            payload.content,
+            payload.tags,
+            payload.shared,
+            settings,
+            member_id=current.member.id,
         )
     except memory_service.MemoryValidationError as exc:
         raise HTTPException(
@@ -141,12 +158,15 @@ async def update_memory(
     return _response(memory)
 
 
-@router.delete("/memory/{memory_id}", dependencies=[Depends(require_token)])
+@router.delete("/memory/{memory_id}")
 async def delete_memory(
     memory_id: int,
+    current: Annotated[MemberContext, Depends(require_member)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, bool]:
-    deleted = await memory_service.delete_memory(memory_id, settings)
+    deleted = await memory_service.delete_memory(
+        memory_id, settings, member_id=current.member.id
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="memory not found"
@@ -193,17 +213,19 @@ MEMORY_PAGE = """<!doctype html>
   <textarea id="content" placeholder="要记住的内容"></textarea>
   <div class="row">
     <input id="tags" placeholder="标签，用逗号分隔（可选）" style="flex:1">
+    <label><input id="shared" type="checkbox"> 全家共享</label>
     <button id="add" type="button">新增记忆</button>
   </div>
 </div>
 <table>
-  <thead><tr><th>内容</th><th>标签</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead>
+  <thead><tr><th>内容</th><th>标签</th><th>来源</th><th>共享</th><th>更新时间</th><th>操作</th></tr></thead>
   <tbody id="body"></tbody>
 </table>
 <script>
 const tokenInput = document.getElementById('token');
 const contentInput = document.getElementById('content');
 const tagsInput = document.getElementById('tags');
+const sharedInput = document.getElementById('shared');
 const statusEl = document.getElementById('status');
 const tbody = document.getElementById('body');
 
@@ -237,8 +259,22 @@ function render(entries) {
     row.appendChild(cell(entry.content));
     row.appendChild(cell((entry.tags || []).join(', ')));
     row.appendChild(cell(entry.source));
+    row.appendChild(cell(entry.shared ? '是' : '否'));
     row.appendChild(cell(entry.updated_at));
     const actions = document.createElement('td');
+    const share = document.createElement('button');
+    share.textContent = entry.shared ? '设为私有' : '共享';
+    share.className = 'secondary';
+    share.onclick = async () => {
+      try {
+        await api('/api/v1/memory/' + entry.id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shared: !entry.shared })
+        });
+        await load();
+      } catch (error) { statusEl.textContent = '修改共享失败：' + error.message; }
+    };
     const edit = document.createElement('button');
     edit.textContent = '编辑';
     edit.className = 'secondary';
@@ -266,7 +302,7 @@ function render(entries) {
     };
     const wrap = document.createElement('div');
     wrap.className = 'actions';
-    wrap.append(edit, remove);
+    wrap.append(share, edit, remove);
     actions.appendChild(wrap);
     row.appendChild(actions);
     tbody.appendChild(row);
@@ -294,10 +330,11 @@ document.getElementById('add').onclick = async () => {
     await api('/api/v1/memory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, tags })
+      body: JSON.stringify({ content, tags, shared: sharedInput.checked })
     });
     contentInput.value = '';
     tagsInput.value = '';
+    sharedInput.checked = false;
     await load();
   } catch (error) { statusEl.textContent = '新增失败：' + error.message; }
 };

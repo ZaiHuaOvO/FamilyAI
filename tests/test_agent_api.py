@@ -19,6 +19,7 @@ def agent_client(tmp_path):
         kb_db_path=str(tmp_path / "kb.db"),
         auto_memory_enabled=False,
         agent_action_ttl_seconds=300,
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as client:
@@ -88,7 +89,7 @@ def test_agent_read_tool(agent_client, monkeypatch: pytest.MonkeyPatch) -> None:
     async def read_plan(message, settings):
         return Plan(tool=registry.TOOLS["get_briefing"], arguments={})
 
-    async def execute(name, arguments, settings):
+    async def execute(name, arguments, settings, member_id):
         return {"counts": {"today": 0, "overdue": 0, "open": 0}}
 
     async def answer(message, tool_result, settings):

@@ -11,6 +11,7 @@ class RequestLogEntry:
     status: int
     duration_ms: float
     client: str
+    member_id: int | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)

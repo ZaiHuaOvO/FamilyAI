@@ -70,12 +70,12 @@ async def test_run_auto_extraction_saves_and_deduplicates(
     monkeypatch.setattr("family_ai_api.memory.extractor.embed_texts", fake_embed)
 
     semaphore = asyncio.Semaphore(1)
-    await run_auto_extraction("请记住我喜欢户外", config, semaphore)
-    await run_auto_extraction("请记住我喜欢户外", config, semaphore)
+    await run_auto_extraction("请记住我喜欢户外", config, semaphore, 1)
+    await run_auto_extraction("请记住我喜欢户外", config, semaphore, 1)
 
     store = MemoryStore(config.memory_db_path)
     try:
-        memories = store.recent()
+        memories = store.list()
         assert len(memories) == 1
         assert memories[0].content == "喜欢户外"
         assert memories[0].source == "auto"
@@ -99,8 +99,8 @@ async def test_run_auto_extraction_disabled_and_no_semaphore(
         "family_ai_api.memory.extractor.extract_candidates", fake_extract
     )
 
-    await run_auto_extraction("请记住我喜欢户外", config, asyncio.Semaphore(1))
-    await run_auto_extraction("请记住我喜欢户外", settings(tmp_path), None)
+    await run_auto_extraction("请记住我喜欢户外", config, asyncio.Semaphore(1), 1)
+    await run_auto_extraction("请记住我喜欢户外", settings(tmp_path), None, 1)
 
     assert called is False
     store = MemoryStore(config.memory_db_path)

@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from family_ai_api.config import Settings, get_settings
-from family_ai_api.security import require_token
+from family_ai_api.security import require_member
 
 router = APIRouter(tags=["models"])
 
 
-@router.get("/models", dependencies=[Depends(require_token)])
+@router.get("/models", dependencies=[Depends(require_member)])
 async def list_models(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:

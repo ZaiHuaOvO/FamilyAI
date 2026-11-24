@@ -22,6 +22,7 @@ def rag_client(tmp_path):
         kb_max_context_chars=1000,
         auto_memory_enabled=False,
         memory_db_path=str(tmp_path / "memory.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     store = KnowledgeStore(settings.kb_db_path)
     store.upsert_document(
@@ -105,6 +106,7 @@ def test_rag_query_empty_knowledge_base(tmp_path, monkeypatch: pytest.MonkeyPatc
         api_access_token="test-token",
         ai_model="test-model",
         kb_db_path=str(tmp_path / "empty.db"),
+        members_db_path=str(tmp_path / "members.db"),
     )
     app.dependency_overrides[get_settings] = lambda: settings
 
