@@ -2,7 +2,7 @@
 
 家庭局域网内使用的本地大模型服务。Mac 本机通过 [Ollama](https://ollama.com/) 运行模型，[FastAPI](https://fastapi.tiangolo.com/) 提供带访问令牌的统一 HTTP API。
 
-> 当前状态：**V7 已完成（`v7.0.0`）**；**V8 外部访问进行中（V8.0/V8.1 已完成，V8.2 待 Tailscale 账号操作）**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
+> 当前状态：**V7 已完成（`v7.0.0`）**；**V8 外部访问进行中（Tailscale Serve 已启用并完成回环绑定迁移，ACL 待配置）**。后续规划见 [路线图](docs/05-路线图/后续路线图.md)。
 
 ## 能力
 
@@ -147,7 +147,7 @@ tailscale serve status
 tailscale funnel status   # 必须为 off
 ```
 
-iOS 设置中的服务器地址填写完整 HTTPS 地址：`https://<machine>.<tailnet>.ts.net`。局域网地址仍可用于过渡期；V8.2 验证 Serve 后再迁移绑定到 `127.0.0.1`。
+iOS 设置中的服务器地址填写完整 HTTPS 地址：`https://<machine>.<tailnet>.ts.net`。当前已迁移为只监听 `127.0.0.1:8000`，局域网直连 8000 已关闭，所有客户端需通过 Tailscale Serve 访问。
 
 - 阶段与验收：[V8 外部访问](docs/02-实施阶段/V8-外部访问.md)
 - 方案决策：[V8 外部访问方案](docs/06-决策记录/V8-外部访问方案.md)
